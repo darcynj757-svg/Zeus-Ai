@@ -1,8 +1,10 @@
 import { Sandbox } from "e2b";
 import { logger } from "./logger";
 
-// Keep sandboxes alive for 10 minutes
 const SANDBOX_TIMEOUT_MS = 10 * 60 * 1000;
+const SERVE_PORT = 3000;
+const READY_POLL_INTERVAL_MS = 500;
+const READY_TIMEOUT_MS = 15_000;
 
 export interface SandboxResult {
   sandboxId: string;
@@ -10,7 +12,8 @@ export interface SandboxResult {
 }
 
 /**
- * Write files to an E2B sandbox and start a dev server.
+ * Write files to an E2B sandbox and start a static HTTP server.
+ * Generated apps are always plain HTML/CSS/JS — no build step needed.
  * Returns the sandbox ID and the preview URL.
  */
 export async function deployToSandbox(
@@ -18,11 +21,13 @@ export async function deployToSandbox(
   existingSandboxId?: string | null
 ): Promise<SandboxResult> {
   if (!process.env.E2B_API_KEY) {
-    throw new Error("E2B_API_KEY environment variable is required for sandbox deployment");
+    throw new Error(
+      "Добавьте E2B_API_KEY в Secrets (Replit → Tools → Secrets) для деплоя в песочницу"
+    );
   }
 
+  // Connect to existing sandbox or create new one
   let sandbox: Sandbox;
-
   try {
     if (existingSandboxId) {
       try {
@@ -30,7 +35,7 @@ export async function deployToSandbox(
         await sandbox.setTimeout(SANDBOX_TIMEOUT_MS);
         logger.info({ sandboxId: existingSandboxId }, "Reconnected to existing sandbox");
       } catch {
-        logger.info({ existingSandboxId }, "Existing sandbox not found, creating new one");
+        logger.info({ existingSandboxId }, "Existing sandbox gone, creating new one");
         sandbox = await Sandbox.create({ timeoutMs: SANDBOX_TIMEOUT_MS });
       }
     } else {
@@ -44,50 +49,57 @@ export async function deployToSandbox(
   const sandboxId = sandbox.sandboxId;
   logger.info({ sandboxId }, "Sandbox ready, writing files");
 
-  // Write files to /home/user/app/
+  // Write all files to /home/user/app/
   for (const file of files) {
     const fullPath = `/home/user/app/${file.path}`;
-    // Create parent dirs
     const dir = fullPath.substring(0, fullPath.lastIndexOf("/"));
     if (dir !== "/home/user/app") {
-      await sandbox.commands.run(`mkdir -p ${dir}`);
+      await sandbox.commands.run(`mkdir -p "${dir}"`);
     }
     await sandbox.files.write(fullPath, file.content);
   }
 
-  // Check if there's a React app (jsx/tsx files) or plain HTML
-  const hasReact = files.some(
-    (f) => f.path.endsWith(".jsx") || f.path.endsWith(".tsx") || f.path.endsWith(".ts")
+  // Always serve as static files — generated apps are plain HTML/CSS/JS
+  logger.info({ sandboxId }, `Starting static server on port ${SERVE_PORT}`);
+  sandbox.commands.run(
+    `cd /home/user/app && npx --yes serve . -p ${SERVE_PORT} --no-clipboard 2>&1`
   );
-  const hasHtml = files.some((f) => f.path === "index.html");
 
-  let previewUrl: string;
+  // Wait until the port is actually listening before returning the URL
+  await waitForPort(sandbox, SERVE_PORT, READY_TIMEOUT_MS, READY_POLL_INTERVAL_MS);
 
-  if (hasReact) {
-    // Install dependencies and start dev server
-    const hasPackageJson = files.some((f) => f.path === "package.json");
-    if (hasPackageJson) {
-      logger.info({ sandboxId }, "Installing npm dependencies");
-      await sandbox.commands.run("cd /home/user/app && npm install", {
-        timeoutMs: 60000,
-      });
-    }
-    // Start vite or react-scripts
-    sandbox.commands.run("cd /home/user/app && npx serve . -p 3000 --no-clipboard 2>&1 &");
-    await new Promise((r) => setTimeout(r, 2000));
-    previewUrl = `https://${sandboxId}-3000.e2b.dev`;
-  } else if (hasHtml) {
-    // Serve static files with a simple HTTP server
-    sandbox.commands.run("cd /home/user/app && npx serve . -p 3000 --no-clipboard 2>&1 &");
-    await new Promise((r) => setTimeout(r, 2000));
-    previewUrl = `https://${sandboxId}-3000.e2b.dev`;
-  } else {
-    // Fallback
-    sandbox.commands.run("cd /home/user/app && npx serve . -p 3000 --no-clipboard 2>&1 &");
-    await new Promise((r) => setTimeout(r, 2000));
-    previewUrl = `https://${sandboxId}-3000.e2b.dev`;
-  }
+  // Use the official SDK method to get the host — never build it manually
+  const host = sandbox.getHost(SERVE_PORT);
+  const previewUrl = `https://${host}`;
 
   logger.info({ sandboxId, previewUrl }, "Sandbox deployed");
   return { sandboxId, previewUrl };
+}
+
+/**
+ * Poll until the given TCP port is listening inside the sandbox,
+ * or throw after the timeout.
+ */
+async function waitForPort(
+  sandbox: Sandbox,
+  port: number,
+  timeoutMs: number,
+  intervalMs: number
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const result = await sandbox.commands.run(
+        `nc -z localhost ${port} && echo OK || echo WAIT`,
+        { timeoutMs: 2000 }
+      );
+      if (result.stdout.includes("OK")) {
+        return;
+      }
+    } catch {
+      // nc might not be available yet — keep polling
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error(`Static server on port ${port} did not start within ${timeoutMs / 1000}s`);
 }

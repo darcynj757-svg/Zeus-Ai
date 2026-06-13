@@ -168,7 +168,8 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     );
   } catch (err) {
     req.log.error({ err }, "Code generation failed");
-    res.status(500).json({ error: "Code generation failed" });
+    const message = err instanceof Error ? err.message : "Code generation failed";
+    res.status(500).json({ error: message });
     return;
   }
 
