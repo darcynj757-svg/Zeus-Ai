@@ -1,10 +1,6 @@
 import { Sandbox } from "e2b";
 import { logger } from "./logger";
 
-if (!process.env.E2B_API_KEY) {
-  throw new Error("E2B_API_KEY environment variable is required");
-}
-
 // Keep sandboxes alive for 10 minutes
 const SANDBOX_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -21,6 +17,10 @@ export async function deployToSandbox(
   files: Array<{ path: string; content: string }>,
   existingSandboxId?: string | null
 ): Promise<SandboxResult> {
+  if (!process.env.E2B_API_KEY) {
+    throw new Error("E2B_API_KEY environment variable is required for sandbox deployment");
+  }
+
   let sandbox: Sandbox;
 
   try {

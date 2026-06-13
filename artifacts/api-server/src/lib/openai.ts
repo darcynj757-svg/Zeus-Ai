@@ -1,11 +1,5 @@
 import OpenAI from "openai";
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY environment variable is required");
-}
-
-export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 export const SYSTEM_PROMPT = `You are a code generation engine. Your job is to generate complete, working frontend application code.
 
 RULES:
@@ -25,10 +19,19 @@ export interface GeneratedOutput {
   message: string;
 }
 
+function getOpenAIClient(): OpenAI {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY environment variable is required for code generation");
+  }
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+
 export async function generateWithOpenAI(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   userMessage: string
 ): Promise<GeneratedOutput> {
+  const openai = getOpenAIClient();
+
   const chatMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
     { role: "system", content: SYSTEM_PROMPT },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
