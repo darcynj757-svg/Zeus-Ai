@@ -116,7 +116,7 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
          <span className="text-sm font-medium">{projectName}</span>
       </div>
       <div className="flex items-center gap-2">
-        <Select value={activeProjectId?.toString()} onValueChange={(v) => onSelectProject(parseInt(v))}>
+        <Select value={activeProjectId?.toString() ?? ""} onValueChange={(v) => onSelectProject(parseInt(v))}>
           <SelectTrigger className="w-[180px] h-8 text-xs font-mono bg-background border-border">
             <SelectValue placeholder="Select project" />
           </SelectTrigger>
@@ -153,26 +153,40 @@ function ChatPanel({ projectId }: { projectId: number }) {
   const { data: messages, isLoading } = useListMessages(projectId, { query: { enabled: !!projectId, queryKey: getListMessagesQueryKey(projectId) } });
   const generateCode = useGenerateCode();
   const [prompt, setPrompt] = useState("");
+  const [chatError, setChatError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Clear error when switching projects
+  useEffect(() => {
+    setChatError(null);
+  }, [projectId]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, generateCode.isPending]);
+  }, [messages, generateCode.isPending, chatError]);
 
   const handleGenerate = () => {
     if (!prompt.trim()) return;
     const userMsg = prompt;
     setPrompt("");
+    setChatError(null);
     generateCode.mutate({ id: projectId, data: { message: userMsg } }, {
       onSuccess: () => {
+        setChatError(null);
         queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
         queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(projectId) });
         queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
       },
       onError: (err) => {
-        toast.error(extractApiError(err), { duration: 6000 });
+        const message = extractApiError(err);
+        // Show toast for visibility
+        toast.error(message, { duration: 8000 });
+        // Show inline error in the chat history
+        setChatError(message);
+        // Refresh messages to show the user prompt that was saved before the error
+        queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
       }
     });
   };
@@ -185,7 +199,7 @@ function ChatPanel({ projectId }: { projectId: number }) {
       
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="flex flex-col gap-4 pb-4">
-          {messages?.length === 0 && !generateCode.isPending && (
+          {messages?.length === 0 && !generateCode.isPending && !chatError && (
             <div className="text-sm text-muted-foreground text-center mt-10 font-mono">
               Initialize your project. Describe what you want to build.
             </div>
@@ -214,6 +228,16 @@ function ChatPanel({ projectId }: { projectId: number }) {
               <div className="text-sm rounded-md px-3 py-2 max-w-[90%] bg-secondary text-secondary-foreground border border-primary/50 flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 <span className="font-mono text-xs animate-pulse">Generating...</span>
+              </div>
+            </div>
+          )}
+          {chatError && !generateCode.isPending && (
+            <div className="flex flex-col items-start">
+              <div className="flex items-center gap-1 mb-1 px-1">
+                <span className="text-[10px] uppercase font-mono font-semibold text-destructive">error</span>
+              </div>
+              <div className="text-sm rounded-md px-3 py-2 max-w-[90%] bg-destructive/10 text-destructive border border-destructive/40 font-sans whitespace-pre-wrap">
+                ⚠ {chatError}
               </div>
             </div>
           )}
