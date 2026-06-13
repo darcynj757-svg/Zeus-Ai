@@ -4,7 +4,7 @@ import { logger } from "./logger";
 const SANDBOX_TIMEOUT_MS = 10 * 60 * 1000;
 const SERVE_PORT = 3000;
 const READY_POLL_INTERVAL_MS = 500;
-const READY_TIMEOUT_MS = 15_000;
+const READY_TIMEOUT_MS = 30_000;
 
 export interface SandboxResult {
   sandboxId: string;
@@ -59,10 +59,12 @@ export async function deployToSandbox(
     await sandbox.files.write(fullPath, file.content);
   }
 
-  // Always serve as static files — generated apps are plain HTML/CSS/JS
+  // Always serve as static files — generated apps are plain HTML/CSS/JS.
+  // Python's built-in http.server is pre-installed in E2B and starts instantly,
+  // avoiding the ~20s npx download delay.
   logger.info({ sandboxId }, `Starting static server on port ${SERVE_PORT}`);
   sandbox.commands.run(
-    `cd /home/user/app && npx --yes serve . -p ${SERVE_PORT} --no-clipboard 2>&1`
+    `cd /home/user/app && python3 -m http.server ${SERVE_PORT} 2>&1 &`
   );
 
   // Wait until the port is actually listening before returning the URL
