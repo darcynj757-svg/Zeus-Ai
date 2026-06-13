@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import { 
   useListProjects, 
   useCreateProject, 
@@ -18,9 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { RefreshCw, Play, Send, Plus, Terminal, Code2, Loader2, FileCode2, Trash2, ExternalLink } from "lucide-react";
+import { RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2, Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Highlight, themes } from "prism-react-renderer";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 export default function Home() {
   const queryClient = useQueryClient();
@@ -35,7 +37,7 @@ export default function Home() {
     if (projects.length === 0 && !createdRef.current) {
       createdRef.current = true;
       createProject.mutate(
-        { data: { name: "My First App" } },
+        { data: { name: "Моё приложение" } },
         {
           onSuccess: (newProj) => {
             queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
@@ -55,7 +57,11 @@ export default function Home() {
   const { data: project } = useGetProject(activeProjectId as number, { query: { enabled: !!activeProjectId, queryKey: getGetProjectQueryKey(activeProjectId as number) } });
   
   if (projectsLoading || (!activeProjectId && projects?.length === 0)) {
-    return <div className="flex h-screen w-full items-center justify-center bg-background text-foreground"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
@@ -64,7 +70,7 @@ export default function Home() {
         projects={projects || []} 
         activeProjectId={activeProjectId} 
         onSelectProject={setActiveProjectId}
-        projectName={project?.name || "Loading..."}
+        projectName={project?.name || "Загрузка..."}
       />
       <div className="flex flex-1 overflow-hidden border-t border-border">
         {activeProjectId ? (
@@ -74,7 +80,9 @@ export default function Home() {
             <PreviewPanel projectId={activeProjectId} previewUrl={project?.previewUrl} />
           </>
         ) : (
-           <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          <div className="flex h-full w-full items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
         )}
       </div>
     </div>
@@ -82,12 +90,13 @@ export default function Home() {
 }
 
 function Header({ projects, activeProjectId, onSelectProject, projectName }: any) {
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const createProject = useCreateProject();
   const deleteProject = useDeleteProject();
 
   const handleNewProject = () => {
-    createProject.mutate({ data: { name: "New App " + Math.floor(Math.random() * 100) } }, {
+    createProject.mutate({ data: { name: "Новое приложение " + Math.floor(Math.random() * 100) } }, {
       onSuccess: (p) => {
         queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
         onSelectProject(p.id);
@@ -99,7 +108,7 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
     if (!activeProjectId) return;
     deleteProject.mutate({ id: activeProjectId }, {
       onSuccess: () => {
-        toast.success("Project deleted");
+        toast.success("Проект удалён");
         queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
         onSelectProject(null);
       }
@@ -108,17 +117,26 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
 
   return (
     <header className="flex h-12 shrink-0 items-center justify-between px-4 bg-sidebar border-b border-sidebar-border">
-      <div className="flex items-center gap-2">
-        <Terminal className="h-5 w-5 text-primary" />
-        <span className="font-mono font-semibold tracking-tight">VIBE CODING</span>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => navigate("/")}
+          className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors text-xs"
+          title="На главную"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+        </button>
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-primary fill-primary" />
+          <span className="font-mono font-semibold tracking-tight text-sm">ZEUS AI</span>
+        </div>
       </div>
       <div className="flex flex-1 items-center justify-center">
-         <span className="text-sm font-medium">{projectName}</span>
+        <span className="text-sm font-medium">{projectName}</span>
       </div>
       <div className="flex items-center gap-2">
         <Select value={activeProjectId?.toString() ?? ""} onValueChange={(v) => onSelectProject(parseInt(v))}>
           <SelectTrigger className="w-[180px] h-8 text-xs font-mono bg-background border-border">
-            <SelectValue placeholder="Select project" />
+            <SelectValue placeholder="Выбери проект" />
           </SelectTrigger>
           <SelectContent>
             {projects?.map((p: any) => (
@@ -127,7 +145,7 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
           </SelectContent>
         </Select>
         <Button variant="secondary" size="sm" className="h-8" onClick={handleNewProject}>
-          <Plus className="h-4 w-4 mr-1" /> New
+          <Plus className="h-4 w-4 mr-1" /> Новый
         </Button>
         <Button variant="destructive" size="icon" className="h-8 w-8" onClick={handleDelete} disabled={!activeProjectId || deleteProject.isPending}>
           <Trash2 className="h-4 w-4" />
@@ -138,10 +156,8 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
 }
 
 function extractApiError(err: unknown): string {
-  if (!err) return "Unknown error";
+  if (!err) return "Неизвестная ошибка";
   if (err instanceof Error) {
-    // ApiError.message already contains the `error` field from the response body,
-    // formatted as "HTTP 500 ...: <message>". Strip the prefix for cleaner toasts.
     const match = err.message.match(/:\s*(.+)$/s);
     return match ? match[1].trim() : err.message;
   }
@@ -155,8 +171,8 @@ function ChatPanel({ projectId }: { projectId: number }) {
   const [prompt, setPrompt] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const initialPromptUsed = useRef(false);
 
-  // Clear error when switching projects
   useEffect(() => {
     setChatError(null);
   }, [projectId]);
@@ -167,8 +183,22 @@ function ChatPanel({ projectId }: { projectId: number }) {
     }
   }, [messages, generateCode.isPending, chatError]);
 
+  useEffect(() => {
+    if (!initialPromptUsed.current) {
+      const saved = sessionStorage.getItem("zeus_initial_prompt");
+      if (saved) {
+        sessionStorage.removeItem("zeus_initial_prompt");
+        initialPromptUsed.current = true;
+        setPrompt(saved);
+      }
+    }
+  }, []);
+
+  const speech = useSpeechRecognition((text) => setPrompt(text));
+
   const handleGenerate = () => {
     if (!prompt.trim()) return;
+    if (speech.isListening) speech.stop();
     const userMsg = prompt;
     setPrompt("");
     setChatError(null);
@@ -181,11 +211,8 @@ function ChatPanel({ projectId }: { projectId: number }) {
       },
       onError: (err) => {
         const message = extractApiError(err);
-        // Show toast for visibility
         toast.error(message, { duration: 8000 });
-        // Show inline error in the chat history
         setChatError(message);
-        // Refresh messages to show the user prompt that was saved before the error
         queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
       }
     });
@@ -194,21 +221,23 @@ function ChatPanel({ projectId }: { projectId: number }) {
   return (
     <div className="flex w-[350px] shrink-0 flex-col border-r border-border bg-sidebar relative z-10">
       <div className="flex h-10 items-center px-4 border-b border-sidebar-border bg-background/50">
-        <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">Terminal / Chat</span>
+        <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">Чат</span>
       </div>
       
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="flex flex-col gap-4 pb-4">
           {messages?.length === 0 && !generateCode.isPending && !chatError && (
-            <div className="text-sm text-muted-foreground text-center mt-10 font-mono">
-              Initialize your project. Describe what you want to build.
+            <div className="text-sm text-muted-foreground text-center mt-10 font-sans leading-relaxed">
+              <div className="text-2xl mb-3">⚡</div>
+              <div className="font-medium text-foreground/80 mb-1">Расскажи, что хочешь создать</div>
+              <div className="text-xs text-muted-foreground/70">Можно писать или говорить голосом</div>
             </div>
           )}
           {messages?.map((msg: any) => (
             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div className="flex items-center gap-2 mb-1 px-1">
                 <span className={`text-[10px] uppercase font-mono font-semibold ${msg.role === 'user' ? 'text-primary' : 'text-muted-foreground'}`}>
-                  {msg.role}
+                  {msg.role === 'user' ? 'Ты' : 'Zeus'}
                 </span>
               </div>
               <div className={`text-sm rounded-md px-3 py-2 max-w-[90%] font-sans whitespace-pre-wrap ${
@@ -220,21 +249,19 @@ function ChatPanel({ projectId }: { projectId: number }) {
           ))}
           {generateCode.isPending && (
             <div className="flex flex-col items-start">
-               <div className="flex items-center gap-2 mb-1 px-1">
-                <span className="text-[10px] uppercase font-mono font-semibold text-primary">
-                  assistant
-                </span>
+              <div className="flex items-center gap-2 mb-1 px-1">
+                <span className="text-[10px] uppercase font-mono font-semibold text-primary">Zeus</span>
               </div>
               <div className="text-sm rounded-md px-3 py-2 max-w-[90%] bg-secondary text-secondary-foreground border border-primary/50 flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="font-mono text-xs animate-pulse">Generating...</span>
+                <span className="font-mono text-xs animate-pulse">Генерирую...</span>
               </div>
             </div>
           )}
           {chatError && !generateCode.isPending && (
             <div className="flex flex-col items-start">
               <div className="flex items-center gap-1 mb-1 px-1">
-                <span className="text-[10px] uppercase font-mono font-semibold text-destructive">error</span>
+                <span className="text-[10px] uppercase font-mono font-semibold text-destructive">ошибка</span>
               </div>
               <div className="text-sm rounded-md px-3 py-2 max-w-[90%] bg-destructive/10 text-destructive border border-destructive/40 font-sans whitespace-pre-wrap">
                 ⚠ {chatError}
@@ -255,20 +282,48 @@ function ChatPanel({ projectId }: { projectId: number }) {
                 handleGenerate();
               }
             }}
-            placeholder="Describe your app..."
-            className="min-h-[80px] resize-none pr-10 font-sans text-sm bg-secondary/50 border-sidebar-border focus-visible:ring-primary"
+            placeholder="Опиши своё приложение..."
+            className="min-h-[80px] resize-none pr-20 font-sans text-sm bg-secondary/50 border-sidebar-border focus-visible:ring-primary"
             disabled={generateCode.isPending}
           />
-          <Button 
-            size="icon" 
-            variant="ghost" 
-            className="absolute bottom-2 right-2 h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-            onClick={handleGenerate}
-            disabled={generateCode.isPending || !prompt.trim()}
-          >
-            {generateCode.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+          <div className="absolute bottom-2 right-2 flex items-center gap-1">
+            {speech.isSupported && (
+              <Button
+                size="icon"
+                variant="ghost"
+                type="button"
+                title={speech.isListening ? "Остановить запись" : "Голосовой ввод"}
+                className={`h-8 w-8 transition-all ${
+                  speech.isListening
+                    ? "text-red-400 hover:text-red-300 hover:bg-red-500/10 animate-pulse"
+                    : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                }`}
+                onClick={() => speech.toggle(prompt)}
+                disabled={generateCode.isPending}
+              >
+                {speech.isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </Button>
+            )}
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+              onClick={handleGenerate}
+              disabled={generateCode.isPending || !prompt.trim()}
+            >
+              {generateCode.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
+        {speech.isListening && (
+          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-red-400">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-400"></span>
+            </span>
+            Слушаю... говори
+          </div>
+        )}
       </div>
     </div>
   );
@@ -299,7 +354,7 @@ function CodePanel({ projectId }: { projectId: number }) {
     <div className="flex flex-1 flex-col bg-background relative z-0">
       <div className="flex h-10 items-center overflow-x-auto border-b border-border bg-sidebar shrink-0 no-scrollbar">
         {(!files || files.length === 0) && (
-          <div className="px-4 text-xs text-muted-foreground font-mono">No files yet</div>
+          <div className="px-4 text-xs text-muted-foreground font-mono">Файлов пока нет</div>
         )}
         {files?.map(f => (
           <button
@@ -352,14 +407,14 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
   const hasFiles = (files?.length ?? 0) > 0;
 
   const handleRefresh = () => {
-    toast.loading("Deploying to sandbox…", { id: "sandbox-refresh" });
+    toast.loading("Разворачиваю в песочнице…", { id: "sandbox-refresh" });
     refreshSandbox.mutate({ id: projectId }, {
       onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
         if (data.previewUrl) {
-          toast.success("Sandbox refreshed!", { id: "sandbox-refresh" });
+          toast.success("Готово!", { id: "sandbox-refresh" });
         } else {
-          toast.info("No files to deploy yet.", { id: "sandbox-refresh" });
+          toast.info("Нет файлов для деплоя.", { id: "sandbox-refresh" });
         }
       },
       onError: (err) => {
@@ -373,7 +428,7 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
       <div className="flex h-10 items-center justify-between px-3 border-b border-border bg-sidebar">
         <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">
           <Play className="h-3.5 w-3.5" />
-          Preview
+          Превью
         </div>
         <div className="flex items-center gap-2">
           {previewUrl && (
@@ -394,7 +449,7 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
             className="h-6 w-6 text-muted-foreground hover:text-primary"
             onClick={handleRefresh}
             disabled={refreshSandbox.isPending || !hasFiles}
-            title={hasFiles ? "Redeploy to sandbox" : "Generate code first"}
+            title={hasFiles ? "Переразвернуть в песочнице" : "Сначала сгенерируй код"}
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshSandbox.isPending ? 'animate-spin' : ''}`} />
           </Button>
@@ -407,7 +462,7 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
             key={previewUrl}
             src={previewUrl} 
             className="w-full h-full border-0"
-            title="Preview"
+            title="Превью"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
           />
         ) : (
@@ -415,8 +470,8 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
             <div className="h-16 w-16 rounded-full bg-secondary flex items-center justify-center mb-4">
               <Play className="h-6 w-6 text-muted-foreground ml-1" />
             </div>
-            <h3 className="text-sm font-semibold text-foreground mb-1">No preview available</h3>
-            <p className="text-xs text-muted-foreground">Describe your app in the chat to get started.</p>
+            <h3 className="text-sm font-semibold text-foreground mb-1">Превью пока нет</h3>
+            <p className="text-xs text-muted-foreground">Опиши своё приложение в чате — Zeus сделает всё сам.</p>
           </div>
         )}
         
@@ -424,7 +479,7 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
             <div className="text-sm font-mono font-semibold text-foreground">
-              {generateCode.isPending ? "Generating & Deploying…" : "Redeploying Sandbox…"}
+              {generateCode.isPending ? "Генерирую и разворачиваю…" : "Разворачиваю песочницу…"}
             </div>
           </div>
         )}
