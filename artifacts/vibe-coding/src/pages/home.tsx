@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { RefreshCw, Play, Send, Plus, Terminal, Code2, Loader2, FileCode2, Trash2 } from "lucide-react";
+import { RefreshCw, Play, Send, Plus, Terminal, Code2, Loader2, FileCode2, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Highlight, themes } from "prism-react-renderer";
 
@@ -137,6 +137,17 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
   );
 }
 
+function extractApiError(err: unknown): string {
+  if (!err) return "Unknown error";
+  if (err instanceof Error) {
+    // ApiError.message already contains the `error` field from the response body,
+    // formatted as "HTTP 500 ...: <message>". Strip the prefix for cleaner toasts.
+    const match = err.message.match(/:\s*(.+)$/s);
+    return match ? match[1].trim() : err.message;
+  }
+  return String(err);
+}
+
 function ChatPanel({ projectId }: { projectId: number }) {
   const queryClient = useQueryClient();
   const { data: messages, isLoading } = useListMessages(projectId, { query: { enabled: !!projectId, queryKey: getListMessagesQueryKey(projectId) } });
@@ -161,7 +172,7 @@ function ChatPanel({ projectId }: { projectId: number }) {
         queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
       },
       onError: (err) => {
-        toast.error("Failed to generate code.");
+        toast.error(extractApiError(err), { duration: 6000 });
       }
     });
   };
@@ -263,7 +274,7 @@ function CodePanel({ projectId }: { projectId: number }) {
   return (
     <div className="flex flex-1 flex-col bg-background relative z-0">
       <div className="flex h-10 items-center overflow-x-auto border-b border-border bg-sidebar shrink-0 no-scrollbar">
-        {files?.length === 0 && (
+        {(!files || files.length === 0) && (
           <div className="px-4 text-xs text-muted-foreground font-mono">No files yet</div>
         )}
         {files?.map(f => (
@@ -312,11 +323,23 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
   const refreshSandbox = useRefreshSandbox();
   const queryClient = useQueryClient();
   const generateCode = useGenerateCode();
+  const { data: files } = useListFiles(projectId, { query: { enabled: !!projectId, queryKey: getListFilesQueryKey(projectId) } });
+
+  const hasFiles = (files?.length ?? 0) > 0;
 
   const handleRefresh = () => {
+    toast.loading("Deploying to sandbox…", { id: "sandbox-refresh" });
     refreshSandbox.mutate({ id: projectId }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+        if (data.previewUrl) {
+          toast.success("Sandbox refreshed!", { id: "sandbox-refresh" });
+        } else {
+          toast.info("No files to deploy yet.", { id: "sandbox-refresh" });
+        }
+      },
+      onError: (err) => {
+        toast.error(extractApiError(err), { id: "sandbox-refresh", duration: 6000 });
       }
     });
   };
@@ -334,9 +357,11 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
               href={previewUrl} 
               target="_blank" 
               rel="noreferrer"
-              className="text-xs text-primary hover:underline truncate max-w-[200px]"
+              className="flex items-center gap-1 text-xs text-primary hover:underline truncate max-w-[160px]"
+              title={previewUrl}
             >
-              {previewUrl.replace('https://', '')}
+              <ExternalLink className="h-3 w-3 shrink-0" />
+              <span className="truncate">{previewUrl.replace('https://', '')}</span>
             </a>
           )}
           <Button 
@@ -344,7 +369,8 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
             size="icon" 
             className="h-6 w-6 text-muted-foreground hover:text-primary"
             onClick={handleRefresh}
-            disabled={refreshSandbox.isPending || !previewUrl}
+            disabled={refreshSandbox.isPending || !hasFiles}
+            title={hasFiles ? "Redeploy to sandbox" : "Generate code first"}
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshSandbox.isPending ? 'animate-spin' : ''}`} />
           </Button>
@@ -354,6 +380,7 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
       <div className="flex-1 bg-white relative">
         {previewUrl ? (
           <iframe 
+            key={previewUrl}
             src={previewUrl} 
             className="w-full h-full border-0"
             title="Preview"
@@ -369,10 +396,12 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
           </div>
         )}
         
-        {generateCode.isPending && (
+        {(generateCode.isPending || refreshSandbox.isPending) && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <div className="text-sm font-mono font-semibold text-foreground">Deploying Sandbox...</div>
+            <div className="text-sm font-mono font-semibold text-foreground">
+              {generateCode.isPending ? "Generating & Deploying…" : "Redeploying Sandbox…"}
+            </div>
           </div>
         )}
       </div>

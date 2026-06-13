@@ -264,7 +264,8 @@ router.post("/projects/:id/sandbox/refresh", async (req, res): Promise<void> => 
     res.json({ previewUrl: result.previewUrl });
   } catch (err) {
     req.log.error({ err }, "Sandbox refresh failed");
-    res.status(500).json({ error: "Sandbox refresh failed" });
+    const message = err instanceof Error ? err.message : "Sandbox refresh failed";
+    res.status(500).json({ error: message });
   }
 });
 
