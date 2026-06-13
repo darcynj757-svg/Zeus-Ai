@@ -3,13 +3,19 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Vibe Coding Service API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: projects
+    description: Project operations
+  - name: messages
+    description: Message operations
+  - name: files
+    description: File operations
 paths:
   /healthz:
     get:
@@ -24,6 +30,165 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /projects/{id}/messages:
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: List messages for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+  /projects/{id}/files:
+    get:
+      operationId: listFiles
+      tags: [files]
+      summary: List files for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectFile"
+
+  /projects/{id}/generate:
+    post:
+      operationId: generateCode
+      tags: [projects]
+      summary: Send a prompt to Claude, generate code, deploy to E2B sandbox, return preview URL
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateInput"
+      responses:
+        "200":
+          description: Generation result with preview URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateResult"
+        "404":
+          description: Project not found
+        "500":
+          description: Generation error
+
+  /projects/{id}/sandbox/refresh:
+    post:
+      operationId: refreshSandbox
+      tags: [projects]
+      summary: Restart the sandbox for a project and get fresh preview URL
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Fresh preview URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SandboxStatus"
+        "404":
+          description: Project not found
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +199,83 @@ components:
       required:
         - status
 
+    Project:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sandboxId:
+          type: ["string", "null"]
+        previewUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    ProjectInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+
+    Message:
+      type: object
+      required: [id, projectId, role, content, createdAt]
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+
+    ProjectFile:
+      type: object
+      required: [id, projectId, path, content, updatedAt]
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        path:
+          type: string
+        content:
+          type: string
+        updatedAt:
+          type: string
+
+    GenerateInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+
+    GenerateResult:
+      type: object
+      required: [message, files, previewUrl]
+      properties:
+        message:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectFile"
+        previewUrl:
+          type: ["string", "null"]
+
+    SandboxStatus:
+      type: object
+      required: [previewUrl]
+      properties:
+        previewUrl:
+          type: ["string", "null"]
