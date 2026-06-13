@@ -54,20 +54,28 @@ export async function deployToSandbox(
     const fullPath = `/home/user/app/${file.path}`;
     const dir = fullPath.substring(0, fullPath.lastIndexOf("/"));
     if (dir !== "/home/user/app") {
-      await sandbox.commands.run(`mkdir -p "${dir}"`);
+      await sandbox.commands.run(`mkdir -p "${dir}"`, { timeoutMs: 5000 });
     }
     await sandbox.files.write(fullPath, file.content);
   }
 
   // Always serve as static files — generated apps are plain HTML/CSS/JS.
-  // Python's built-in http.server is pre-installed in E2B and starts instantly,
-  // avoiding the ~20s npx download delay.
+  // Python's built-in http.server is pre-installed in E2B and starts instantly.
+  // Fire-and-forget: shell returns immediately thanks to `&`.
+  // timeoutMs:5000 covers the shell startup; .catch() prevents unhandled rejection
+  // from crashing the Node process when the internal CommandHandle eventually times out.
   logger.info({ sandboxId }, `Starting static server on port ${SERVE_PORT}`);
-  sandbox.commands.run(
-    `cd /home/user/app && python3 -m http.server ${SERVE_PORT} 2>&1 &`
-  );
+  sandbox.commands
+    .run(`cd /home/user/app && python3 -m http.server ${SERVE_PORT} > /tmp/server.log 2>&1 &`, {
+      timeoutMs: 5000,
+    })
+    .catch(() => {
+      // Expected: shell exits immediately (background &), CommandHandle may
+      // still emit a timeout — suppress it so the Node process stays alive.
+    });
 
-  // Wait until the port is actually listening before returning the URL
+  // Wait until the port is actually listening before returning the URL.
+  // Uses Python (guaranteed to be present) instead of nc/curl to check the port.
   await waitForPort(sandbox, SERVE_PORT, READY_TIMEOUT_MS, READY_POLL_INTERVAL_MS);
 
   // Use the official SDK method to get the host — never build it manually
@@ -79,8 +87,8 @@ export async function deployToSandbox(
 }
 
 /**
- * Poll until the given TCP port is listening inside the sandbox,
- * or throw after the timeout.
+ * Poll until the given TCP port is listening inside the sandbox, or throw after timeout.
+ * Uses Python's socket module — guaranteed available since we use Python for the server.
  */
 async function waitForPort(
   sandbox: Sandbox,
@@ -92,14 +100,14 @@ async function waitForPort(
   while (Date.now() < deadline) {
     try {
       const result = await sandbox.commands.run(
-        `nc -z localhost ${port} && echo OK || echo WAIT`,
-        { timeoutMs: 2000 }
+        `python3 -c "import socket; s=socket.socket(); s.settimeout(1); r=s.connect_ex(('localhost',${port})); s.close(); print('OK' if r==0 else 'WAIT')"`,
+        { timeoutMs: 3000 }
       );
-      if (result.stdout.includes("OK")) {
+      if (result.stdout.trim() === "OK") {
         return;
       }
     } catch {
-      // nc might not be available yet — keep polling
+      // Poll error — keep trying
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
