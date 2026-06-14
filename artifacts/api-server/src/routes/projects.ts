@@ -12,7 +12,7 @@ import {
   ListMessagesParams,
   ListFilesParams,
 } from "@workspace/api-zod";
-import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput } from "../lib/openai";
+import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePlan } from "../lib/openai";
 import { deployToSandbox } from "../lib/sandbox";
 
 const router = Router();
@@ -85,6 +85,23 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
     return;
   }
   res.sendStatus(204);
+});
+
+// POST /projects/plan
+router.post("/projects/plan", async (req, res): Promise<void> => {
+  const { prompt, projectType } = req.body as { prompt?: string; projectType?: string };
+  if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+    res.status(400).json({ error: "prompt is required" });
+    return;
+  }
+  try {
+    const plan = await generatePlan(prompt.trim(), projectType ?? null);
+    res.json(plan);
+  } catch (err) {
+    req.log.error({ err }, "Plan generation failed");
+    const message = err instanceof Error ? err.message : "Plan generation failed";
+    res.status(500).json({ error: message });
+  }
 });
 
 // GET /projects/:id/messages

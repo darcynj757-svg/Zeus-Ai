@@ -273,6 +273,64 @@ export async function* streamWithOpenAI(
   }
 }
 
+export interface ProjectPlan {
+  title: string;
+  sections: Array<{ name: string; description: string }>;
+  techNotes: string;
+}
+
+const PLAN_SYSTEM_PROMPT = `You are a senior frontend architect. Given a user description and project type, produce a concise structural plan — NO code whatsoever.
+
+OUTPUT FORMAT (non-negotiable): respond ONLY with a single valid JSON object, zero markdown outside JSON:
+{
+  "title": "short project name (3–6 words)",
+  "sections": [
+    { "name": "Section or Screen name", "description": "one sentence on content and purpose" }
+  ],
+  "techNotes": "one sentence on key technical decisions"
+}
+
+Rules:
+- sections: 4–8 items for landing/shop, 3–6 for app, 3–5 for card
+- Each description: max 15 words, specific to the user brief
+- title: specific and on-brand, not generic
+- techNotes: mention relevant tech (React CDN, CSS Grid, localStorage, etc.)
+- Zero code, zero HTML, zero CSS — structure and intent only`;
+
+export async function generatePlan(
+  prompt: string,
+  projectType?: string | null
+): Promise<ProjectPlan> {
+  const openai = getOpenAIClient();
+
+  const typeHint = projectType ? `Project type: ${projectType}` : "";
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: PLAN_SYSTEM_PROMPT },
+      { role: "user", content: `${typeHint}\n\nUser description: ${prompt}` },
+    ],
+    temperature: 0.3,
+    max_tokens: 1000,
+  });
+
+  const raw = response.choices[0]?.message?.content ?? "";
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  const parsed = JSON.parse(cleaned) as ProjectPlan;
+
+  if (!Array.isArray(parsed.sections) || typeof parsed.title !== "string") {
+    throw new Error("Invalid plan JSON structure from OpenAI");
+  }
+
+  return parsed;
+}
+
 export function parseGeneratedOutput(raw: string): GeneratedOutput {
   const cleaned = raw
     .replace(/^```json\s*/i, "")

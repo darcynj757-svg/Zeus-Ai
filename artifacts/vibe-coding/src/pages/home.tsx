@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2,
   Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2, RotateCcw, Download,
+  ListChecks, Pencil, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Highlight, themes } from "prism-react-renderer";
@@ -32,6 +33,12 @@ interface StreamState {
   liveText: string;
   files: string[];
   error: string | null;
+}
+
+interface ProjectPlan {
+  title: string;
+  sections: Array<{ name: string; description: string }>;
+  techNotes: string;
 }
 
 const initialStreamState: StreamState = {
@@ -454,10 +461,12 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
 
 function ChatPanel({
   projectId,
+  projectType,
   streamState,
   onGenerate,
 }: {
   projectId: number;
+  projectType?: string | null;
   streamState: StreamState;
   onGenerate: (projectId: number, message: string) => void;
 }) {
@@ -465,37 +474,96 @@ function ChatPanel({
     query: { enabled: !!projectId, queryKey: getListMessagesQueryKey(projectId) },
   });
   const [prompt, setPrompt] = useState("");
+  const [planMode, setPlanMode] = useState(false);
+  const [plan, setPlan] = useState<ProjectPlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, streamState.isStreaming, streamState.liveText, streamState.error]);
+  }, [messages, streamState.isStreaming, streamState.liveText, streamState.error, plan, planLoading]);
 
   const speech = useSpeechRecognition((text) => setPrompt(text));
 
-  const handleGenerate = () => {
-    if (!prompt.trim() || streamState.isStreaming) return;
+  const handleGenerate = async () => {
+    if (!prompt.trim() || streamState.isStreaming || planLoading) return;
     if (speech.isListening) speech.stop();
-    const userMsg = prompt;
+    const userMsg = prompt.trim();
+
+    if (planMode) {
+      setPendingPrompt(userMsg);
+      setPrompt("");
+      setPlan(null);
+      setPlanLoading(true);
+      try {
+        const res = await fetch("/api/projects/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: userMsg, projectType: projectType ?? "landing" }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Ошибка получения плана" }));
+          throw new Error(err.error ?? "Ошибка получения плана");
+        }
+        const data = await res.json() as ProjectPlan;
+        setPlan(data);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Ошибка Plan Mode", { duration: 6000 });
+        setPrompt(userMsg);
+      } finally {
+        setPlanLoading(false);
+      }
+      return;
+    }
+
     setPrompt("");
     onGenerate(projectId, userMsg);
   };
 
+  const handleConfirmPlan = () => {
+    if (!plan || !pendingPrompt) return;
+    const enriched = `${pendingPrompt}\n\n[Plan approved — follow this structure:]\nTitle: ${plan.title}\nSections:\n${plan.sections.map((s, i) => `${i + 1}. ${s.name}: ${s.description}`).join("\n")}\nTech notes: ${plan.techNotes}`;
+    setPlan(null);
+    setPendingPrompt("");
+    onGenerate(projectId, enriched);
+  };
+
+  const handleEditPlan = () => {
+    setPrompt(pendingPrompt);
+    setPlan(null);
+    setPendingPrompt("");
+  };
+
   return (
     <div className="flex w-[350px] shrink-0 flex-col border-r border-border bg-sidebar relative z-10">
-      <div className="flex h-10 items-center px-4 border-b border-sidebar-border bg-background/50">
+      <div className="flex h-10 items-center justify-between px-4 border-b border-sidebar-border bg-background/50">
         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">Чат</span>
+        <button
+          onClick={() => { setPlanMode((v) => !v); setPlan(null); setPendingPrompt(""); }}
+          title={planMode ? "Plan Mode включён — нажми чтобы выключить" : "Включить Plan Mode: Zeus покажет план перед генерацией"}
+          className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium border transition-all ${
+            planMode
+              ? "bg-primary/15 border-primary/40 text-primary"
+              : "bg-transparent border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+          }`}
+        >
+          <ListChecks className="h-3 w-3" />
+          Plan Mode
+        </button>
       </div>
 
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="flex flex-col gap-4 pb-4">
-          {messages?.length === 0 && !streamState.isStreaming && !streamState.error && (
+          {messages?.length === 0 && !streamState.isStreaming && !streamState.error && !plan && !planLoading && (
             <div className="text-sm text-muted-foreground text-center mt-10 font-sans leading-relaxed">
               <div className="text-2xl mb-3">⚡</div>
               <div className="font-medium text-foreground/80 mb-1">Расскажи, что хочешь создать</div>
-              <div className="text-xs text-muted-foreground/70">Можно писать или говорить голосом</div>
+              <div className="text-xs text-muted-foreground/70">
+                {planMode ? "Plan Mode включён — Zeus покажет план перед кодом" : "Можно писать или говорить голосом"}
+              </div>
             </div>
           )}
 
@@ -521,6 +589,67 @@ function ChatPanel({
               </div>
             </div>
           ))}
+
+          {/* Plan loading */}
+          {planLoading && (
+            <div className="flex flex-col items-start gap-2">
+              <span className="text-[10px] uppercase font-mono font-semibold text-primary px-1">Zeus</span>
+              <div className="w-full rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                <span className="text-xs font-mono text-primary font-medium">Составляю план проекта...</span>
+              </div>
+            </div>
+          )}
+
+          {/* Plan card */}
+          {plan && !planLoading && !streamState.isStreaming && (
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] uppercase font-mono font-semibold text-primary px-1">Zeus — план</span>
+              <div className="w-full rounded-lg border border-primary/25 bg-primary/5 overflow-hidden">
+                <div className="px-3 py-2.5 border-b border-primary/15">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="h-3 w-3 text-primary shrink-0" />
+                    <span className="text-sm font-semibold text-foreground">{plan.title}</span>
+                  </div>
+                </div>
+                <div className="px-3 py-2 flex flex-col gap-1.5">
+                  {plan.sections.map((s, i) => (
+                    <div key={i} className="flex gap-2">
+                      <span className="text-[10px] font-mono text-primary/60 mt-0.5 shrink-0 w-4">{i + 1}.</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold text-foreground/90 leading-tight">{s.name}</span>
+                        <span className="text-[11px] text-muted-foreground leading-tight mt-0.5">{s.description}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {plan.techNotes && (
+                  <div className="px-3 py-2 border-t border-primary/10 bg-secondary/30">
+                    <span className="text-[10px] text-muted-foreground/70 leading-relaxed">{plan.techNotes}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1 h-8 text-xs gap-1.5"
+                  onClick={handleConfirmPlan}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Сгенерировать
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-8 text-xs gap-1.5"
+                  onClick={handleEditPlan}
+                >
+                  <Pencil className="h-3 w-3" />
+                  Изменить запрос
+                </Button>
+              </div>
+            </div>
+          )}
 
           {streamState.isStreaming && (
             <div className="flex flex-col items-start gap-2">
@@ -578,9 +707,9 @@ function ChatPanel({
                 handleGenerate();
               }
             }}
-            placeholder="Опиши своё приложение..."
+            placeholder={planMode ? "Опиши проект — Zeus покажет план..." : "Опиши своё приложение..."}
             className="min-h-[80px] resize-none pr-20 font-sans text-sm bg-secondary/50 border-sidebar-border focus-visible:ring-primary"
-            disabled={streamState.isStreaming}
+            disabled={streamState.isStreaming || planLoading || !!plan}
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-1">
             {speech.isSupported && (
@@ -595,7 +724,7 @@ function ChatPanel({
                     : "text-muted-foreground hover:text-primary hover:bg-primary/10"
                 }`}
                 onClick={() => speech.toggle(prompt)}
-                disabled={streamState.isStreaming}
+                disabled={streamState.isStreaming || planLoading || !!plan}
               >
                 {speech.isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
@@ -605,9 +734,17 @@ function ChatPanel({
               variant="ghost"
               className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
               onClick={handleGenerate}
-              disabled={streamState.isStreaming || !prompt.trim()}
+              disabled={streamState.isStreaming || planLoading || !!plan || !prompt.trim()}
             >
-              {streamState.isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {planLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : planMode ? (
+                <ListChecks className="h-4 w-4" />
+              ) : streamState.isStreaming ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </div>
         </div>
@@ -752,6 +889,7 @@ export default function Home() {
           <>
             <ChatPanel
               projectId={activeProjectId}
+              projectType={project?.projectType}
               streamState={streamState}
               onGenerate={handleGenerate}
             />
