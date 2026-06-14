@@ -639,8 +639,11 @@ export default function Home() {
     if (projectsLoading || !projects) return;
     if (projects.length === 0 && !createdRef.current) {
       createdRef.current = true;
+      const savedType = sessionStorage.getItem("zeus_project_type") as "landing" | "app" | "shop" | "card" | null;
+      const typeLabels: Record<string, string> = { landing: "Лендинг", app: "Приложение", shop: "Магазин", card: "Визитка" };
+      const projectName = savedType ? `${typeLabels[savedType] ?? "Проект"} ${Math.floor(Math.random() * 100)}` : "Моё приложение";
       createProject.mutate(
-        { data: { name: "Моё приложение" } },
+        { data: { name: projectName, projectType: savedType ?? "landing" } },
         {
           onSuccess: (newProj) => {
             queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
@@ -720,6 +723,7 @@ export default function Home() {
     const saved = sessionStorage.getItem("zeus_initial_prompt");
     if (saved) {
       sessionStorage.removeItem("zeus_initial_prompt");
+      sessionStorage.removeItem("zeus_project_type");
       autoSubmitRef.current = true;
       handleGenerate(activeProjectId, saved);
     }

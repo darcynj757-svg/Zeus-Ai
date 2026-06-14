@@ -44,7 +44,7 @@ router.post("/projects", async (req, res): Promise<void> => {
   }
   const [project] = await db
     .insert(projectsTable)
-    .values({ name: parsed.data.name })
+    .values({ name: parsed.data.name, projectType: parsed.data.projectType ?? "landing" })
     .returning();
   res.status(201).json({ ...project, createdAt: project.createdAt.toISOString() });
 });
@@ -163,13 +163,16 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
 
   const wantsSSE = (req.headers.accept ?? "").includes("text/event-stream");
 
+  const projectType = body.data.projectType ?? project.projectType ?? "landing";
+
   if (!wantsSSE) {
     // --- Fallback: regular JSON response ---
     let generated;
     try {
       generated = await generateWithOpenAI(
         history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-        userMessageContent
+        userMessageContent,
+        projectType
       );
     } catch (err) {
       req.log.error({ err }, "Code generation failed");
@@ -237,7 +240,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     }, 40);
 
     try {
-      for await (const chunk of streamWithOpenAI(historyMapped, userMessageContent)) {
+      for await (const chunk of streamWithOpenAI(historyMapped, userMessageContent, projectType)) {
         fullText += chunk;
         tokenBuffer += chunk;
       }
@@ -257,7 +260,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     } catch {
       // Retry with non-streaming fallback
       sendSSE(res, "status", { text: "Перезапускаю молнию (повторная попытка)..." });
-      generated = await generateWithOpenAI(historyMapped, userMessageContent);
+      generated = await generateWithOpenAI(historyMapped, userMessageContent, projectType);
     }
 
     // Emit file events

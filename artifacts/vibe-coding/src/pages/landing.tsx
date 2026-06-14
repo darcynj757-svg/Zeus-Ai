@@ -5,11 +5,11 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 const NAV_LINKS = ["Шаблоны", "Тарифы", "Примеры", "Блог"];
 
-const TABS = [
-  { icon: "🌐", label: "Сайт-лендинг" },
-  { icon: "⚡", label: "Приложение" },
-  { icon: "🛒", label: "Интернет-магазин" },
-  { icon: "🪪", label: "Визитка" },
+const TABS: Array<{ icon: string; label: string; type: "landing" | "app" | "shop" | "card" }> = [
+  { icon: "🌐", label: "Сайт-лендинг", type: "landing" },
+  { icon: "⚡", label: "Приложение",    type: "app"     },
+  { icon: "🛒", label: "Интернет-магазин", type: "shop" },
+  { icon: "🪪", label: "Визитка",       type: "card"    },
 ];
 
 const CHIP_PROMPTS = [
@@ -67,6 +67,7 @@ export default function Landing() {
   const goToApp = (initialPrompt?: string) => {
     const p = (initialPrompt ?? prompt).trim();
     if (p) sessionStorage.setItem("zeus_initial_prompt", p);
+    sessionStorage.setItem("zeus_project_type", TABS[activeTab].type);
     navigate("/app");
   };
 

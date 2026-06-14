@@ -23,6 +23,7 @@ export const HealthCheckResponse = zod.object({
 export const ListProjectsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "projectType": zod.string().optional(),
   "sandboxId": zod.string().nullish(),
   "previewUrl": zod.string().nullish(),
   "createdAt": zod.string()
@@ -37,7 +38,8 @@ export const ListProjectsResponse = zod.array(ListProjectsResponseItem)
 
 
 export const CreateProjectBody = zod.object({
-  "name": zod.string().min(1)
+  "name": zod.string().min(1),
+  "projectType": zod.enum(["landing", "app", "shop", "card"]).optional().default("landing")
 })
 
 
@@ -51,6 +53,7 @@ export const GetProjectParams = zod.object({
 export const GetProjectResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "projectType": zod.string().optional(),
   "sandboxId": zod.string().nullish(),
   "previewUrl": zod.string().nullish(),
   "createdAt": zod.string()
@@ -110,7 +113,8 @@ export const GenerateCodeParams = zod.object({
 
 
 export const GenerateCodeBody = zod.object({
-  "message": zod.string().min(1)
+  "message": zod.string().min(1),
+  "projectType": zod.enum(["landing", "app", "shop", "card"]).optional()
 })
 
 export const GenerateCodeResponse = zod.object({

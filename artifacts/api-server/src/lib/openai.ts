@@ -97,6 +97,92 @@ export interface GeneratedOutput {
   message: string;
 }
 
+const TYPE_PROMPTS: Record<string, string> = {
+  landing: `
+═══════════════════════════════════════
+PROJECT TYPE: MULTI-SECTION LANDING PAGE
+═══════════════════════════════════════
+Structure (in this order):
+1. Sticky navbar with logo + navigation links
+2. Hero — full-viewport height, large headline, subheadline, 1–2 CTA buttons, atmospheric background (gradient or subtle pattern)
+3. Features / Benefits — 3–6 cards in a responsive grid with icons (use Unicode/emoji), short titles, 1–2 line descriptions
+4. Pricing — 3 tiers with names, prices, feature lists, and a "Most popular" highlight on the middle tier
+5. Testimonials — 2–3 quote cards with avatar placeholder (coloured circle with initials), name, and role
+6. Final CTA — bold call-to-action section with contrasting background
+7. Footer — logo, nav links, social icons (Unicode), copyright
+
+Each section must have a distinct background (alternate between --color-bg and --color-surface) to create visual rhythm.
+Scroll-reveal (.reveal → .visible) on every section except the hero.`,
+
+  app: `
+═══════════════════════════════════════
+PROJECT TYPE: INTERACTIVE SPA (React via CDN)
+═══════════════════════════════════════
+Build with React 18 via CDN (use babel standalone for JSX):
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel" src="app.jsx"></script>
+
+Rename the main logic file to app.jsx (not script.js).
+Required characteristics:
+- Real stateful UI using useState, useEffect, useReducer as appropriate
+- Meaningful features matching the user's description (e.g. todo list with add/complete/delete, calculator with history, expense tracker with categories, form with live validation)
+- localStorage persistence so state survives page refresh
+- Multiple views/screens OR tabs if the app warrants it
+- Polished loading states, empty states, and error states
+- Every interactive element must have hover/focus styles and smooth transitions
+- App shell: fixed/sticky header with app name and optional nav, main content area, footer
+
+File structure: index.html (shell + CDN imports), style.css (design system), app.jsx (all React components).`,
+
+  shop: `
+═══════════════════════════════════════
+PROJECT TYPE: E-COMMERCE / ONLINE STORE
+═══════════════════════════════════════
+Build a polished product catalogue with shopping cart:
+
+1. Sticky header: store logo, navigation, cart icon with item count badge
+2. Hero banner: promotional headline, discount badge, CTA button
+3. Category filter bar: horizontal scrollable pill buttons to filter products by category (All + 3–4 categories); active category is highlighted
+4. Product grid: responsive CSS Grid (1→2→3→4 cols), each card has:
+   - Product image placeholder (coloured rectangle with product emoji/icon)
+   - Product name, short description, price (formatted with currency)
+   - "Add to cart" button with hover lift effect
+   - "Out of stock" state for 1–2 products (disabled button, muted overlay)
+5. Cart sidebar or modal: slides in from the right, lists items with qty controls (+ / −) and remove button, shows subtotal and "Checkout" button
+6. Inventory: pre-populate 8–12 realistic products with names, prices, categories, and descriptions matching the store theme
+7. Footer: store info, links, payment method icons (Unicode)
+
+All cart logic (add, remove, qty change, total) implemented in plain JS with localStorage persistence.`,
+
+  card: `
+═══════════════════════════════════════
+PROJECT TYPE: DIGITAL BUSINESS CARD (single screen)
+═══════════════════════════════════════
+Single-page, single-screen (100vh) layout — NO scrolling sections, everything fits above the fold.
+Layout (centred, card-like container max 480 px wide):
+- Avatar: large circle (120 px) with gradient background and initials or emoji icon
+- Name: large display font, prominent
+- Title / role: subtitle in muted colour
+- Bio: 1–2 sentence tagline
+- Contact row: 3–4 icon+text links (email, phone, location, website) — icons via Unicode or simple SVG inline
+- Social links: row of circular icon buttons (LinkedIn, Instagram, GitHub, etc.) with hover colour
+- CTA button: "Get in touch" or equivalent, full-width, primary colour
+
+Design notes:
+- Background: subtle gradient or mesh pattern (CSS only)
+- Card has white/surface background, generous padding, rounded-xl, box-shadow
+- Micro-animations: avatar subtle float (CSS keyframe), links stagger in on load
+- Dark/light toggle button in top-right corner (toggle class on <body>)
+- Must look stunning on mobile (320–480 px) — this is the primary viewport`,
+};
+
+export function getTypePrompt(projectType?: string | null): string {
+  const type = projectType ?? "landing";
+  return TYPE_PROMPTS[type] ?? TYPE_PROMPTS["landing"];
+}
+
 function getOpenAIClient(): OpenAI {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY environment variable is required for code generation");
@@ -106,12 +192,15 @@ function getOpenAIClient(): OpenAI {
 
 export async function generateWithOpenAI(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
-  userMessage: string
+  userMessage: string,
+  projectType?: string | null
 ): Promise<GeneratedOutput> {
   const openai = getOpenAIClient();
 
+  const fullSystemPrompt = SYSTEM_PROMPT + "\n\n" + getTypePrompt(projectType);
+
   const chatMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: fullSystemPrompt },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: userMessage },
   ];
@@ -157,12 +246,15 @@ export async function generateWithOpenAI(
 
 export async function* streamWithOpenAI(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
-  userMessage: string
+  userMessage: string,
+  projectType?: string | null
 ): AsyncGenerator<string> {
   const openai = getOpenAIClient();
 
+  const fullSystemPrompt = SYSTEM_PROMPT + "\n\n" + getTypePrompt(projectType);
+
   const chatMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: fullSystemPrompt },
     ...messages.map((m) => ({ role: m.role, content: m.content })),
     { role: "user", content: userMessage },
   ];

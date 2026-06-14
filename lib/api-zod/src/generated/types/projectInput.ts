@@ -9,4 +9,5 @@
 export interface ProjectInput {
   /** @minLength 1 */
   name: string;
+  projectType?: 'landing' | 'app' | 'shop' | 'card';
 }
