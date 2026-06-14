@@ -94,7 +94,7 @@ export default function Landing() {
       <header className="fixed top-0 inset-x-0 z-50 flex h-14 items-center justify-between px-5 md:px-8 bg-[#0a0a0f]/85 backdrop-blur-xl border-b border-white/[0.06]">
         {/* Logo */}
         <div className="flex items-center shrink-0">
-          <ZeusLogoFull height={30} />
+          <ZeusLogoFull height={60} />
         </div>
 
         {/* Nav */}
