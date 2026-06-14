@@ -465,6 +465,8 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
   );
 }
 
+type ModelTier = "lite" | "power";
+
 function ChatPanel({
   projectId,
   projectType,
@@ -478,8 +480,8 @@ function ChatPanel({
   projectType?: string | null;
   streamState: StreamState;
   editState: EditState;
-  onGenerate: (projectId: number, message: string) => void;
-  onEdit: (projectId: number, instruction: string) => void;
+  onGenerate: (projectId: number, message: string, tier: ModelTier) => void;
+  onEdit: (projectId: number, instruction: string, tier: ModelTier) => void;
   hasFiles: boolean;
 }) {
   const { data: messages } = useListMessages(projectId, {
@@ -487,6 +489,7 @@ function ChatPanel({
   });
   const [prompt, setPrompt] = useState("");
   const [editPrompt, setEditPrompt] = useState("");
+  const [tier, setTier] = useState<ModelTier>("power");
   const [planMode, setPlanMode] = useState(false);
   const [plan, setPlan] = useState<ProjectPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -533,7 +536,7 @@ function ChatPanel({
     }
 
     setPrompt("");
-    onGenerate(projectId, userMsg);
+    onGenerate(projectId, userMsg, tier);
   };
 
   const handleConfirmPlan = () => {
@@ -541,7 +544,7 @@ function ChatPanel({
     const enriched = `${pendingPrompt}\n\n[Plan approved — follow this structure:]\nTitle: ${plan.title}\nSections:\n${plan.sections.map((s, i) => `${i + 1}. ${s.name}: ${s.description}`).join("\n")}\nTech notes: ${plan.techNotes}`;
     setPlan(null);
     setPendingPrompt("");
-    onGenerate(projectId, enriched);
+    onGenerate(projectId, enriched, tier);
   };
 
   const handleEditPlan = () => {
@@ -554,18 +557,45 @@ function ChatPanel({
     <div className="flex w-[350px] shrink-0 flex-col border-r border-border bg-sidebar relative z-10">
       <div className="flex h-10 items-center justify-between px-4 border-b border-sidebar-border bg-background/50">
         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">Чат</span>
-        <button
-          onClick={() => { setPlanMode((v) => !v); setPlan(null); setPendingPrompt(""); }}
-          title={planMode ? "Plan Mode включён — нажми чтобы выключить" : "Включить Plan Mode: Zeus покажет план перед генерацией"}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium border transition-all ${
-            planMode
-              ? "bg-primary/15 border-primary/40 text-primary"
-              : "bg-transparent border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-          }`}
-        >
-          <ListChecks className="h-3 w-3" />
-          Plan Mode
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* Model tier toggle */}
+          <div className="flex items-center rounded-md border border-border overflow-hidden">
+            <button
+              onClick={() => setTier("lite")}
+              title="Lite — gpt-4o-mini: быстро и дёшево"
+              className={`flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium transition-all ${
+                tier === "lite"
+                  ? "bg-sky-500/20 text-sky-400 border-r border-sky-500/30"
+                  : "text-muted-foreground hover:text-foreground border-r border-border"
+              }`}
+            >
+              ⚡ Lite
+            </button>
+            <button
+              onClick={() => setTier("power")}
+              title="Power — gpt-4o: умнее и мощнее"
+              className={`flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium transition-all ${
+                tier === "power"
+                  ? "bg-orange-500/20 text-orange-400"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              🔥 Power
+            </button>
+          </div>
+          <button
+            onClick={() => { setPlanMode((v) => !v); setPlan(null); setPendingPrompt(""); }}
+            title={planMode ? "Plan Mode включён — нажми чтобы выключить" : "Включить Plan Mode: Zeus покажет план перед генерацией"}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium border transition-all ${
+              planMode
+                ? "bg-primary/15 border-primary/40 text-primary"
+                : "bg-transparent border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            }`}
+          >
+            <ListChecks className="h-3 w-3" />
+            Plan Mode
+          </button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
@@ -799,7 +829,7 @@ function ChatPanel({
               onChange={(e) => setEditPrompt(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !editState.isEditing && editPrompt.trim()) {
-                  onEdit(projectId, editPrompt.trim());
+                  onEdit(projectId, editPrompt.trim(), tier);
                   setEditPrompt("");
                 }
               }}
@@ -814,7 +844,7 @@ function ChatPanel({
               disabled={editState.isEditing || streamState.isStreaming || !editPrompt.trim()}
               onClick={() => {
                 if (!editPrompt.trim()) return;
-                onEdit(projectId, editPrompt.trim());
+                onEdit(projectId, editPrompt.trim(), tier);
                 setEditPrompt("");
               }}
             >
@@ -884,7 +914,7 @@ export default function Home() {
   const hasFiles = (homeFiles?.length ?? 0) > 0;
 
   const handleGenerate = useCallback(
-    async (projectId: number, message: string) => {
+    async (projectId: number, message: string, tier: ModelTier = "power") => {
       setStreamState({ isStreaming: true, status: "Запускаю Зевса...", liveText: "", files: [], error: null });
       setLivePreviewUrl(null);
 
@@ -895,7 +925,7 @@ export default function Home() {
             "Content-Type": "application/json",
             Accept: "text/event-stream",
           },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, tier }),
         });
 
         if (!response.ok) {
@@ -942,14 +972,14 @@ export default function Home() {
   );
 
   const handleEdit = useCallback(
-    async (projectId: number, instruction: string) => {
+    async (projectId: number, instruction: string, tier: ModelTier = "lite") => {
       setEditState({ isEditing: true, status: "Патчу файлы...", error: null });
 
       try {
         const response = await fetch(`/api/projects/${projectId}/edit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ instruction }),
+          body: JSON.stringify({ instruction, tier }),
         });
 
         if (!response.ok) {

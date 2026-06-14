@@ -1,5 +1,12 @@
 import OpenAI from "openai";
 
+export const MODELS = {
+  lite: "gpt-4o-mini",
+  power: "gpt-4o",
+} as const;
+
+export type ModelTier = keyof typeof MODELS;
+
 export const SYSTEM_PROMPT = `You are an elite frontend design engineer. You craft stunning, production-quality web experiences — the kind that win design awards.
 
 ═══════════════════════════════════════
@@ -193,9 +200,11 @@ function getOpenAIClient(): OpenAI {
 export async function generateWithOpenAI(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   userMessage: string,
-  projectType?: string | null
+  projectType?: string | null,
+  tier: ModelTier = "power"
 ): Promise<GeneratedOutput> {
   const openai = getOpenAIClient();
+  const model = MODELS[tier];
 
   const fullSystemPrompt = SYSTEM_PROMPT + "\n\n" + getTypePrompt(projectType);
 
@@ -211,7 +220,7 @@ export async function generateWithOpenAI(
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model,
         messages: chatMessages,
         temperature: 0.2,
         max_tokens: 16000,
@@ -247,9 +256,11 @@ export async function generateWithOpenAI(
 export async function* streamWithOpenAI(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   userMessage: string,
-  projectType?: string | null
+  projectType?: string | null,
+  tier: ModelTier = "power"
 ): AsyncGenerator<string> {
   const openai = getOpenAIClient();
+  const model = MODELS[tier];
 
   const fullSystemPrompt = SYSTEM_PROMPT + "\n\n" + getTypePrompt(projectType);
 
@@ -260,7 +271,7 @@ export async function* streamWithOpenAI(
   ];
 
   const stream = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model,
     messages: chatMessages,
     temperature: 0.2,
     max_tokens: 16000,
@@ -299,14 +310,16 @@ Rules:
 
 export async function generatePlan(
   prompt: string,
-  projectType?: string | null
+  projectType?: string | null,
+  tier: ModelTier = "power"
 ): Promise<ProjectPlan> {
   const openai = getOpenAIClient();
+  const model = MODELS[tier];
 
   const typeHint = projectType ? `Project type: ${projectType}` : "";
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model,
     messages: [
       { role: "system", content: PLAN_SYSTEM_PROMPT },
       { role: "user", content: `${typeHint}\n\nUser description: ${prompt}` },
@@ -350,9 +363,11 @@ Rules:
 
 export async function generateZeusMd(
   files: Array<{ path: string; content: string }>,
-  projectType: string
+  projectType: string,
+  tier: ModelTier = "lite"
 ): Promise<string> {
   const openai = getOpenAIClient();
+  const model = MODELS[tier];
 
   const relevantFiles = files
     .filter((f) => f.path.endsWith(".css") || f.path.endsWith(".html"))
@@ -360,7 +375,7 @@ export async function generateZeusMd(
     .join("\n\n");
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model,
     messages: [
       { role: "system", content: ZEUS_MD_PROMPT },
       { role: "user", content: `Project type: ${projectType}\n\n${relevantFiles}` },
@@ -422,9 +437,11 @@ CRITICAL RULES:
 export async function editProject(
   existingFiles: Array<{ path: string; content: string }>,
   instruction: string,
-  zeusContext?: string | null
+  zeusContext?: string | null,
+  tier: ModelTier = "lite"
 ): Promise<GeneratedOutput> {
   const openai = getOpenAIClient();
+  const model = MODELS[tier];
 
   const zeusBlock = zeusContext
     ? `\n\n[Brand context from zeus.md — maintain these decisions:]\n${zeusContext}`
@@ -441,7 +458,7 @@ export async function editProject(
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model,
         messages: [
           { role: "system", content: EDIT_SYSTEM_PROMPT },
           { role: "user", content: userContent },

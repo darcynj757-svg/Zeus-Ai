@@ -12,10 +12,15 @@ import {
   ListMessagesParams,
   ListFilesParams,
 } from "@workspace/api-zod";
-import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePlan, generateZeusMd, editProject } from "../lib/openai";
+import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePlan, generateZeusMd, editProject, ModelTier } from "../lib/openai";
 import { deployToSandbox, DeployError } from "../lib/sandbox";
 
 const router = Router();
+
+function parseTier(value: unknown): ModelTier {
+  if (value === "lite" || value === "power") return value;
+  return "power";
+}
 
 function sendSSE(res: import("express").Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -89,13 +94,13 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
 
 // POST /projects/plan
 router.post("/projects/plan", async (req, res): Promise<void> => {
-  const { prompt, projectType } = req.body as { prompt?: string; projectType?: string };
+  const { prompt, projectType, tier } = req.body as { prompt?: string; projectType?: string; tier?: unknown };
   if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
     res.status(400).json({ error: "prompt is required" });
     return;
   }
   try {
-    const plan = await generatePlan(prompt.trim(), projectType ?? null);
+    const plan = await generatePlan(prompt.trim(), projectType ?? null, parseTier(tier));
     res.json(plan);
   } catch (err) {
     req.log.error({ err }, "Plan generation failed");
@@ -186,6 +191,9 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
   const wantsSSE = (req.headers.accept ?? "").includes("text/event-stream");
 
   const projectType = body.data.projectType ?? project.projectType ?? "landing";
+  const tier = parseTier((req.body as Record<string, unknown>).tier);
+
+  req.log.info({ model: tier === "lite" ? "gpt-4o-mini" : "gpt-4o", tier }, "generate: model selected");
 
   if (!wantsSSE) {
     // --- Fallback: regular JSON response ---
@@ -194,7 +202,8 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
       generated = await generateWithOpenAI(
         history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         userMessageContent,
-        projectType
+        projectType,
+        tier
       );
     } catch (err) {
       req.log.error({ err }, "Code generation failed");
@@ -277,7 +286,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     }, 40);
 
     try {
-      for await (const chunk of streamWithOpenAI(historyMapped, userMessageContent, projectType)) {
+      for await (const chunk of streamWithOpenAI(historyMapped, userMessageContent, projectType, tier)) {
         fullText += chunk;
         tokenBuffer += chunk;
       }
@@ -297,7 +306,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     } catch {
       // Retry with non-streaming fallback
       sendSSE(res, "status", { text: "Перезапускаю молнию (повторная попытка)..." });
-      generated = await generateWithOpenAI(historyMapped, userMessageContent, projectType);
+      generated = await generateWithOpenAI(historyMapped, userMessageContent, projectType, tier);
     }
 
     // Emit file events
@@ -376,11 +385,12 @@ router.post("/projects/:id/edit", async (req, res): Promise<void> => {
     return;
   }
 
-  const { instruction } = req.body as { instruction?: string };
+  const { instruction, tier: tierRaw } = req.body as { instruction?: string; tier?: unknown };
   if (!instruction || typeof instruction !== "string" || !instruction.trim()) {
     res.status(400).json({ error: "instruction is required" });
     return;
   }
+  const editTier = parseTier(tierRaw);
 
   const [project] = await db
     .select()
@@ -402,12 +412,15 @@ router.post("/projects/:id/edit", async (req, res): Promise<void> => {
     return;
   }
 
+  req.log.info({ model: editTier === "lite" ? "gpt-4o-mini" : "gpt-4o", tier: editTier }, "edit: model selected");
+
   let edited: import("../lib/openai").GeneratedOutput;
   try {
     edited = await editProject(
       existingFiles.map((f) => ({ path: f.path, content: f.content })),
       instruction.trim(),
-      project.zeusContext ?? null
+      project.zeusContext ?? null,
+      editTier
     );
   } catch (err) {
     req.log.error({ err }, "editProject failed");
