@@ -333,142 +333,6 @@ function RightPanel({
   );
 }
 
-export default function Home() {
-  const queryClient = useQueryClient();
-  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
-  const createdRef = useRef(false);
-  const [streamState, setStreamState] = useState<StreamState>(initialStreamState);
-
-  const { data: projects, isLoading: projectsLoading } = useListProjects();
-  const createProject = useCreateProject();
-
-  useEffect(() => {
-    if (projectsLoading || !projects) return;
-    if (projects.length === 0 && !createdRef.current) {
-      createdRef.current = true;
-      createProject.mutate(
-        { data: { name: "Моё приложение" } },
-        {
-          onSuccess: (newProj) => {
-            queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-            setActiveProjectId(newProj.id);
-          },
-          onError: () => {
-            createdRef.current = false;
-          },
-        }
-      );
-    } else if (projects.length > 0 && !activeProjectId) {
-      setActiveProjectId(projects[0].id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projects, projectsLoading]);
-
-  const { data: project } = useGetProject(activeProjectId as number, {
-    query: { enabled: !!activeProjectId, queryKey: getGetProjectQueryKey(activeProjectId as number) },
-  });
-
-  const handleGenerate = useCallback(
-    async (projectId: number, message: string) => {
-      setStreamState({ isStreaming: true, status: "Запускаю Зевса...", liveText: "", files: [], error: null });
-
-      try {
-        const response = await fetch(`/api/projects/${projectId}/generate`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "text/event-stream",
-          },
-          body: JSON.stringify({ message }),
-        });
-
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(errText || `HTTP ${response.status}`);
-        }
-
-        await readSSEStream(response, (type, data) => {
-          if (type === "status") {
-            setStreamState((s) => ({ ...s, status: (data.text as string) ?? s.status }));
-          } else if (type === "token") {
-            setStreamState((s) => ({ ...s, liveText: s.liveText + ((data.text as string) ?? "") }));
-          } else if (type === "file") {
-            setStreamState((s) => ({
-              ...s,
-              files: s.files.includes(data.path as string) ? s.files : [...s.files, data.path as string],
-            }));
-          } else if (type === "done") {
-            setStreamState((s) => ({ ...s, isStreaming: false, status: "Готово ⚡" }));
-            queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
-            queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(projectId) });
-            queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
-          } else if (type === "error") {
-            const errMsg = (data.text as string) ?? "Ошибка генерации";
-            setStreamState((s) => ({ ...s, isStreaming: false, error: errMsg }));
-            toast.error(errMsg, { duration: 8000 });
-          }
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "Ошибка соединения";
-        setStreamState((s) => ({ ...s, isStreaming: false, error: msg }));
-        toast.error(msg, { duration: 8000 });
-      }
-    },
-    [queryClient]
-  );
-
-  // Auto-submit prompt from landing page once project is ready
-  const autoSubmitRef = useRef(false);
-  useEffect(() => {
-    if (!activeProjectId || autoSubmitRef.current) return;
-    const saved = sessionStorage.getItem("zeus_initial_prompt");
-    if (saved) {
-      sessionStorage.removeItem("zeus_initial_prompt");
-      autoSubmitRef.current = true;
-      handleGenerate(activeProjectId, saved);
-    }
-  }, [activeProjectId, handleGenerate]);
-
-  if (projectsLoading || (!activeProjectId && projects?.length === 0)) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex h-screen w-full flex-col bg-background text-foreground overflow-hidden">
-      <Header
-        projects={projects || []}
-        activeProjectId={activeProjectId}
-        onSelectProject={setActiveProjectId}
-        projectName={project?.name || "Загрузка..."}
-      />
-      <div className="flex flex-1 overflow-hidden border-t border-border">
-        {activeProjectId ? (
-          <>
-            <ChatPanel
-              projectId={activeProjectId}
-              streamState={streamState}
-              onGenerate={handleGenerate}
-            />
-            <RightPanel
-              projectId={activeProjectId}
-              previewUrl={project?.previewUrl}
-              streamState={streamState}
-            />
-          </>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function Header({ projects, activeProjectId, onSelectProject, projectName }: any) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -558,7 +422,7 @@ function ChatPanel({
   streamState: StreamState;
   onGenerate: (projectId: number, message: string) => void;
 }) {
-  const { data: messages, isLoading } = useListMessages(projectId, {
+  const { data: messages } = useListMessages(projectId, {
     query: { enabled: !!projectId, queryKey: getListMessagesQueryKey(projectId) },
   });
   const [prompt, setPrompt] = useState("");
@@ -569,7 +433,6 @@ function ChatPanel({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, streamState.isStreaming, streamState.liveText, streamState.error]);
-
 
   const speech = useSpeechRecognition((text) => setPrompt(text));
 
@@ -620,20 +483,17 @@ function ChatPanel({
             </div>
           ))}
 
-          {/* Live streaming block */}
           {streamState.isStreaming && (
             <div className="flex flex-col items-start gap-2">
               <div className="flex items-center gap-2 mb-1 px-1">
                 <span className="text-[10px] uppercase font-mono font-semibold text-primary">Zeus</span>
               </div>
 
-              {/* Status bar */}
               <div className="w-full rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 flex items-center gap-2">
                 <span className="text-base animate-pulse shrink-0">⚡</span>
                 <span className="text-xs font-mono text-primary font-medium truncate">{streamState.status}</span>
               </div>
 
-              {/* Files list */}
               {streamState.files.length > 0 && (
                 <div className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 flex flex-col gap-1">
                   {streamState.files.map((f) => (
@@ -645,7 +505,6 @@ function ChatPanel({
                 </div>
               )}
 
-              {/* Live token text (last ~200 chars) */}
               {streamState.liveText.length > 0 && (
                 <div className="w-full rounded-lg border border-border bg-secondary/20 px-3 py-2">
                   <p className="text-[11px] font-mono text-muted-foreground/60 leading-relaxed line-clamp-4 break-all">
@@ -727,3 +586,144 @@ function ChatPanel({
   );
 }
 
+export default function Home() {
+  const queryClient = useQueryClient();
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
+  const createdRef = useRef(false);
+  const [streamState, setStreamState] = useState<StreamState>(initialStreamState);
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
+
+  const { data: projects, isLoading: projectsLoading } = useListProjects();
+  const createProject = useCreateProject();
+
+  useEffect(() => {
+    if (projectsLoading || !projects) return;
+    if (projects.length === 0 && !createdRef.current) {
+      createdRef.current = true;
+      createProject.mutate(
+        { data: { name: "Моё приложение" } },
+        {
+          onSuccess: (newProj) => {
+            queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+            setActiveProjectId(newProj.id);
+          },
+          onError: () => {
+            createdRef.current = false;
+          },
+        }
+      );
+    } else if (projects.length > 0 && !activeProjectId) {
+      setActiveProjectId(projects[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, projectsLoading]);
+
+  const { data: project } = useGetProject(activeProjectId as number, {
+    query: { enabled: !!activeProjectId, queryKey: getGetProjectQueryKey(activeProjectId as number) },
+  });
+
+  const handleGenerate = useCallback(
+    async (projectId: number, message: string) => {
+      setStreamState({ isStreaming: true, status: "Запускаю Зевса...", liveText: "", files: [], error: null });
+      setLivePreviewUrl(null);
+
+      try {
+        const response = await fetch(`/api/projects/${projectId}/generate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({ message }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText || `HTTP ${response.status}`);
+        }
+
+        await readSSEStream(response, (type, data) => {
+          if (type === "status") {
+            setStreamState((s) => ({ ...s, status: (data.text as string) ?? s.status }));
+          } else if (type === "token") {
+            setStreamState((s) => ({ ...s, liveText: s.liveText + ((data.text as string) ?? "") }));
+          } else if (type === "file") {
+            setStreamState((s) => ({
+              ...s,
+              files: s.files.includes(data.path as string) ? s.files : [...s.files, data.path as string],
+            }));
+          } else if (type === "done") {
+            const url = (data.previewUrl as string | null) ?? null;
+            if (url) setLivePreviewUrl(url);
+            setStreamState((s) => ({ ...s, isStreaming: false, status: "Готово ⚡" }));
+            queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
+            queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(projectId) });
+            queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+          } else if (type === "error") {
+            const errMsg = (data.text as string) ?? "Ошибка генерации";
+            setStreamState((s) => ({ ...s, isStreaming: false, error: errMsg }));
+            toast.error(errMsg, { duration: 8000 });
+          }
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Ошибка соединения";
+        setStreamState((s) => ({ ...s, isStreaming: false, error: msg }));
+        toast.error(msg, { duration: 8000 });
+      }
+    },
+    [queryClient]
+  );
+
+  // Auto-submit prompt from landing page once project is ready
+  const autoSubmitRef = useRef(false);
+  useEffect(() => {
+    if (!activeProjectId || autoSubmitRef.current) return;
+    const saved = sessionStorage.getItem("zeus_initial_prompt");
+    if (saved) {
+      sessionStorage.removeItem("zeus_initial_prompt");
+      autoSubmitRef.current = true;
+      handleGenerate(activeProjectId, saved);
+    }
+  }, [activeProjectId, handleGenerate]);
+
+  if (projectsLoading || (!activeProjectId && projects?.length === 0)) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const previewUrl = livePreviewUrl ?? project?.previewUrl ?? null;
+
+  return (
+    <div className="flex h-screen w-full flex-col bg-background text-foreground overflow-hidden">
+      <Header
+        projects={projects || []}
+        activeProjectId={activeProjectId}
+        onSelectProject={setActiveProjectId}
+        projectName={project?.name || "Загрузка..."}
+      />
+      <div className="flex flex-1 overflow-hidden border-t border-border">
+        {activeProjectId ? (
+          <>
+            <ChatPanel
+              projectId={activeProjectId}
+              streamState={streamState}
+              onGenerate={handleGenerate}
+            />
+            <RightPanel
+              projectId={activeProjectId}
+              previewUrl={previewUrl}
+              streamState={streamState}
+            />
+          </>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

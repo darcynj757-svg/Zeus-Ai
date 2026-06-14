@@ -282,7 +282,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     }
 
     // Deploy to E2B
-    sendSSE(res, "status", { text: "Разворачиваю в песочнице..." });
+    sendSSE(res, "status", { text: "Деплою в песочницу..." });
     let previewUrl: string | null = project.previewUrl;
     let sandboxId: string | null = project.sandboxId;
     try {
@@ -290,11 +290,13 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
       previewUrl = result.previewUrl;
       sandboxId = result.sandboxId;
       await db.update(projectsTable).set({ previewUrl, sandboxId }).where(eq(projectsTable.id, params.data.id));
+      sendSSE(res, "status", { text: "Превью готово ✓" });
     } catch (err) {
       req.log.error({ err }, "Sandbox deployment failed");
+      const sandboxErrMsg = err instanceof Error ? err.message : "Ошибка деплоя в песочницу";
+      sendSSE(res, "status", { text: `⚠ Ошибка деплоя: ${sandboxErrMsg}` });
     }
 
-    sendSSE(res, "status", { text: "Готово! Молния поразила цель ⚡" });
     sendSSE(res, "done", { previewUrl, message: generated.message });
   } catch (err) {
     req.log.error({ err }, "Streaming generation failed");
