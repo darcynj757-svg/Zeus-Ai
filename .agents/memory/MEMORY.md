@@ -1,0 +1,1 @@
+- [Express 5 router wildcards](express5-wildcards.md) — path-to-regexp@8 требует именованных wildcards: `/*name`, НЕ `/*` (бросает PathError).

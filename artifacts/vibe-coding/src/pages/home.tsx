@@ -21,7 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2,
   Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2, RotateCcw, Download,
-  ListChecks, Pencil, Sparkles, Wand2, History,
+  ListChecks, Pencil, Sparkles, Wand2, History, Globe, Copy, Check,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
@@ -476,6 +476,100 @@ function HistoryDropdown({ projectId, onRestored }: { projectId: number; onResto
   );
 }
 
+function PublishButton({ projectId }: { projectId: number | null }) {
+  const [loading, setLoading] = useState(false);
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [slug, setSlug] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!projectId) { setPublicUrl(null); setSlug(null); return; }
+    fetch(`/api/projects/${projectId}/published`)
+      .then((r) => r.json())
+      .then((d: any) => {
+        if (d.published) { setPublicUrl(d.publicUrl); setSlug(d.slug); }
+        else { setPublicUrl(null); setSlug(null); }
+      })
+      .catch(() => {});
+  }, [projectId]);
+
+  const handlePublish = async () => {
+    if (!projectId || loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/publish`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Ошибка публикации" }));
+        throw new Error((err as any).error ?? "Ошибка публикации");
+      }
+      const data = await res.json() as { slug: string; publicUrl: string; isUpdate: boolean };
+      setPublicUrl(data.publicUrl);
+      setSlug(data.slug);
+      toast.success(data.isUpdate ? `Публикация обновлена /${data.slug}` : `Опубликовано! /${data.slug}`, { duration: 6000 });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Ошибка публикации", { duration: 6000 });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!publicUrl) return;
+    navigator.clipboard.writeText(publicUrl).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (!projectId) return null;
+
+  return (
+    <div className="flex items-center gap-1">
+      {publicUrl ? (
+        <>
+          <span className="hidden lg:block text-[10px] text-emerald-400 font-mono font-medium max-w-[90px] truncate" title={slug ?? ""}>
+            /{slug}
+          </span>
+          <button
+            onClick={handleCopy}
+            title={`Скопировать ссылку: ${publicUrl}`}
+            className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all"
+          >
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            <span className="hidden sm:inline">{copied ? "Скопировано" : "Копировать"}</span>
+          </button>
+          <a
+            href={publicUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Открыть опубликованный сайт"
+            className="flex items-center px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground transition-all"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
+          <button
+            onClick={handlePublish}
+            disabled={loading}
+            title="Обновить публикацию (re-publish)"
+            className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md border border-border text-muted-foreground hover:text-foreground transition-all disabled:opacity-50"
+          >
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+            <span className="hidden sm:inline">Обновить</span>
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={handlePublish}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-border bg-background hover:bg-accent text-foreground transition-all disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+          Публикация
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Header({ projects, activeProjectId, onSelectProject, projectName }: any) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -527,6 +621,7 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
         <span className="text-sm font-medium">{projectName}</span>
       </div>
       <div className="flex items-center gap-2">
+        <PublishButton projectId={activeProjectId ?? null} />
         <Select value={activeProjectId?.toString() ?? ""} onValueChange={(v) => onSelectProject(parseInt(v))}>
           <SelectTrigger className="w-[180px] h-8 text-xs font-mono bg-background border-border">
             <SelectValue placeholder="Выбери проект" />

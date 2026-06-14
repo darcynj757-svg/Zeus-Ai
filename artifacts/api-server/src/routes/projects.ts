@@ -1,7 +1,7 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { eq, asc, desc } from "drizzle-orm";
 import { ZipArchive } from "archiver";
-import { db, projectsTable, messagesTable, filesTable, snapshotsTable } from "@workspace/db";
+import { db, projectsTable, messagesTable, filesTable, snapshotsTable, publishedSitesTable } from "@workspace/db";
 import {
   CreateProjectBody,
   GetProjectParams,
@@ -16,6 +16,32 @@ import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePla
 import { deployToSandbox, DeployError } from "../lib/sandbox";
 
 const router = Router();
+
+function generateSlug(name: string): string {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, "")
+      .trim()
+      .replace(/[\s_]+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 30)
+      .replace(/^-|-$/g, "") || "site";
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${base}-${suffix}`;
+}
+
+function buildPublicUrl(req: Request, slug: string): string {
+  const devDomain = process.env.REPLIT_DEV_DOMAIN;
+  if (devDomain) return `https://${devDomain}/sites/${slug}`;
+  const proto =
+    (req.headers["x-forwarded-proto"] as string | undefined) ?? req.protocol;
+  const host =
+    (req.headers["x-forwarded-host"] as string | undefined) ??
+    req.get("host") ??
+    "localhost";
+  return `${proto}://${host}/sites/${slug}`;
+}
 
 function parseTier(value: unknown): ModelTier {
   if (value === "lite" || value === "power") return value;
@@ -94,6 +120,7 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
   await db.delete(messagesTable).where(eq(messagesTable.projectId, params.data.id));
   await db.delete(filesTable).where(eq(filesTable.projectId, params.data.id));
   await db.delete(snapshotsTable).where(eq(snapshotsTable.projectId, params.data.id));
+  await db.delete(publishedSitesTable).where(eq(publishedSitesTable.projectId, params.data.id));
   const [deleted] = await db
     .delete(projectsTable)
     .where(eq(projectsTable.id, params.data.id))
@@ -706,4 +733,92 @@ router.post("/projects/:id/restore/:snapshotId", async (req, res): Promise<void>
   });
 });
 
+// GET /projects/:id/published — check if project has been published
+router.get("/projects/:id/published", async (req, res): Promise<void> => {
+  const params = GetProjectParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [site] = await db
+    .select({
+      slug: publishedSitesTable.slug,
+      updatedAt: publishedSitesTable.updatedAt,
+    })
+    .from(publishedSitesTable)
+    .where(eq(publishedSitesTable.projectId, params.data.id));
+
+  if (!site) {
+    res.json({ published: false });
+    return;
+  }
+  const publicUrl = buildPublicUrl(req, site.slug);
+  res.json({ published: true, slug: site.slug, publicUrl, updatedAt: site.updatedAt.toISOString() });
+});
+
+// POST /projects/:id/publish — publish (or re-publish) current files on stable URL
+router.post("/projects/:id/publish", async (req, res): Promise<void> => {
+  const params = GetProjectParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [project] = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.id, params.data.id));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  const files = await db
+    .select()
+    .from(filesTable)
+    .where(eq(filesTable.projectId, params.data.id))
+    .orderBy(asc(filesTable.path));
+
+  if (files.length === 0) {
+    res.status(400).json({ error: "Нет файлов для публикации — сначала сгенерируй проект" });
+    return;
+  }
+
+  const filesJson = JSON.stringify(files.map((f) => ({ path: f.path, content: f.content })));
+
+  const [existing] = await db
+    .select()
+    .from(publishedSitesTable)
+    .where(eq(publishedSitesTable.projectId, params.data.id));
+
+  let slug: string;
+  const now = new Date();
+
+  if (existing) {
+    slug = existing.slug;
+    await db
+      .update(publishedSitesTable)
+      .set({ filesJson, updatedAt: now })
+      .where(eq(publishedSitesTable.projectId, params.data.id));
+  } else {
+    slug = generateSlug(project.name);
+    await db.insert(publishedSitesTable).values({
+      projectId: params.data.id,
+      slug,
+      filesJson,
+    });
+  }
+
+  const publicUrl = buildPublicUrl(req, slug);
+  req.log.info({ slug, publicUrl, isUpdate: !!existing }, "project published");
+
+  res.json({
+    slug,
+    publicUrl,
+    updatedAt: now.toISOString(),
+    isUpdate: !!existing,
+  });
+});
+
 export default router;
+
