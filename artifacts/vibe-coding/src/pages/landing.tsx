@@ -170,13 +170,13 @@ export default function Landing() {
             <span className="px-1.5 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-bold tracking-wider uppercase">
               NEW
             </span>
-            <span>Голосовой ввод уже работает</span>
+            <span>Zeus AI превратит вашу идею в готовый проект!</span>
             <span className="text-white/30">→</span>
           </div>
 
           {/* Hero heading */}
           <h1
-            className="text-[52px] sm:text-[70px] md:text-[88px] leading-[1.02] tracking-tight text-white"
+            className="text-[40px] sm:text-[56px] md:text-[70px] leading-[1.02] tracking-tight text-white"
             style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700 }}
           >
             <span className="block" style={{ fontWeight: 500, color: "rgba(255,255,255,0.88)" }}>
