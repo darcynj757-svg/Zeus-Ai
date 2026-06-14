@@ -26,13 +26,64 @@ Respond ONLY with a single valid JSON object. Zero markdown, zero prose outside 
 - If the user asks for changes, return every file again with the changes applied
 
 ═══════════════════════════════════════
+CDN WHITELIST (only these external domains allowed)
+═══════════════════════════════════════
+Allowed: fonts.googleapis.com, fonts.gstatic.com, unpkg.com, cdn.jsdelivr.net,
+         cdnjs.cloudflare.com, source.unsplash.com, images.unsplash.com, picsum.photos
+NEVER use any other external domain for scripts, styles, fonts, or images.
+
+═══════════════════════════════════════
+IMAGES (mandatory — no CSS/emoji placeholders)
+═══════════════════════════════════════
+- ALWAYS use real <img> tags with actual photo URLs — never coloured div/CSS-only placeholders
+- Hero backgrounds: use a real photo via CSS background-image or <img>:
+    background-image: url('https://source.unsplash.com/1600x900/?TOPIC,KEYWORDS');
+  or place an <img src="https://source.unsplash.com/1600x900/?TOPIC,KEYWORDS" alt="..." loading="lazy">
+- Section/card images: https://picsum.photos/seed/UNIQUESEED/WIDTH/HEIGHT (vary seed per image)
+    e.g. picsum.photos/seed/cafe1/600/400, picsum.photos/seed/cafe2/600/400
+- Topic photos: https://source.unsplash.com/800x600/?coffee,latte (comma-separated keywords matching the theme)
+- Every <img> must have: meaningful alt="…" describing the scene, loading="lazy", CSS object-fit: cover
+- Image containers must have explicit height (e.g. height: 260px) so images display correctly
+
+═══════════════════════════════════════
+ICONS (Lucide CDN — mandatory, no Unicode/emoji for UI icons)
+═══════════════════════════════════════
+- Always include in <head> before </head>:
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+- Use icon elements: <i data-lucide="coffee"></i>, <i data-lucide="star"></i>, etc.
+- At end of script.js always call: lucide.createIcons();
+- Pick icons relevant to the theme (e.g. coffee, map-pin, phone, mail, shopping-cart,
+  check, arrow-right, star, heart, clock, users, zap, shield, globe)
+- Social links: lucide icons (github, twitter, instagram, linkedin, youtube)
+- Nav hamburger: <i data-lucide="menu"></i> / <i data-lucide="x"></i> toggled via JS
+- Size all icons via CSS: [data-lucide] { width: 20px; height: 20px; display: inline-block; }
+
+═══════════════════════════════════════
+ANIMATIONS (AOS + Animate.css — mandatory)
+═══════════════════════════════════════
+- Always include in <head>:
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+- In script.js inside DOMContentLoaded: AOS.init({ duration: 700, once: true, offset: 80 });
+- Add data-aos on every section and card:
+    data-aos="fade-up"      — sections scrolling in
+    data-aos="fade-right"   — left-side content
+    data-aos="zoom-in"      — feature cards, icons
+- Stagger card grids with delays: data-aos-delay="0", data-aos-delay="100", data-aos-delay="200"
+- Hero headline: class="animate__animated animate__fadeInDown"
+- Hero subheadline: class="animate__animated animate__fadeInUp animate__delay-1s"
+- CTA button: class="animate__animated animate__fadeIn animate__delay-2s"
+- Keep animations subtle — max 3 different AOS variants per page, no excessive delays
+
+═══════════════════════════════════════
 DESIGN SYSTEM  (apply to every project)
 ═══════════════════════════════════════
 1. CSS VARIABLES — always open style.css with a :root block:
    • Colour palette: --color-bg, --color-surface, --color-primary, --color-primary-hover,
      --color-text, --color-text-muted, --color-border
-   • Typography scale: --font-sans, --font-display, --text-xs … --text-5xl (clamp-based)
-   • Spacing scale: --space-1 … --space-20 (4-point grid)
+   • Typography scale: --font-sans, --font-display, --text-xs through --text-5xl (clamp-based)
+   • Spacing scale: --space-1 through --space-20 (4-point grid)
    • Borders: --radius-sm, --radius-md, --radius-lg, --radius-full
    • Shadows: --shadow-sm, --shadow-md, --shadow-lg, --shadow-glow
    • Transitions: --transition-fast (150ms ease), --transition-base (250ms ease), --transition-slow (400ms ease)
@@ -55,33 +106,50 @@ DESIGN SYSTEM  (apply to every project)
    • Stack columns on mobile, switch to grid on tablet+
    • Touch targets ≥ 44 px
 
-5. ANIMATIONS & INTERACTIONS:
+5. MICRO-INTERACTIONS:
    • Smooth hover/focus transitions on all interactive elements (colour, shadow, transform)
-   • Scroll-reveal: add class .reveal to sections; script.js uses IntersectionObserver to toggle .visible (opacity 0→1, translateY 24px→0, 0.6 s ease)
-   • Micro-interactions: button press scale(0.97), card lift translateY(-4px) + shadow-lg
-   • No jarring instant state changes — every transition uses a CSS variable duration
+   • Button press: active { transform: scale(0.97) }
+   • Card hover: translateY(-4px) + box-shadow upgrade
+   • Every transition uses a CSS variable duration
 
 6. COMPONENTS (use as needed):
-   • Navbar: sticky, backdrop-filter blur, transparent→solid on scroll; hamburger menu on mobile
-   • Hero: full-viewport-height, large headline, subheadline, 1–2 CTAs, optional gradient/image background
-   • Cards: consistent padding, border, radius, shadow; hover lift effect
+   • Navbar: sticky, backdrop-filter blur, transparent→scrolled (bg + shadow) on scroll; hamburger on mobile
+   • Hero: full-viewport-height, real background image with overlay, large headline (Animate.css), subheadline, 1–2 CTAs
+   • Cards: consistent padding, border, radius, shadow; hover lift; real picsum images at top; Lucide icons
    • Buttons: primary (filled), secondary (outline), sizes sm/md/lg; focus-visible ring
    • Badges / tags: pill shape, muted background
    • Dividers: subtle gradient lines between sections
+
+═══════════════════════════════════════
+INTERACTIVITY (vanilla JS in script.js — mandatory)
+═══════════════════════════════════════
+Always implement ALL that apply to the project type:
+- DOMContentLoaded wrapper: all JS inside document.addEventListener('DOMContentLoaded', () => { ... })
+- AOS.init({ duration: 700, once: true, offset: 80 })  — always
+- lucide.createIcons()  — always, after AOS.init()
+- Hamburger menu: toggle .nav-open on <nav>, swap data-lucide="menu"↔"x", then re-run lucide.createIcons()
+- Navbar scroll: window.addEventListener('scroll', () => header.classList.toggle('scrolled', scrollY > 50))
+- Smooth scroll: all a[href^="#"] → e.preventDefault() + target.scrollIntoView({ behavior: 'smooth' })
+- Active nav link: highlight current section link based on scroll position (IntersectionObserver)
+- Form validation: check required fields, show inline .error-msg, clear on fix, success state on submit
+- Tabs: .tab-btn click → toggle .active, show matching .tab-panel
+- Accordion/FAQ: .accordion-btn click → toggle .open on parent item, animate max-height
+- For shop type: full cart (add/remove/qty/total) via localStorage, live badge, sidebar open/close
 
 ═══════════════════════════════════════
 CONTENT  (apply to every project)
 ═══════════════════════════════════════
 - Write real, specific, on-brand copy — never "Lorem ipsum" or placeholder text
 - Invent plausible names, taglines, prices, testimonials, team members, features that fit the brief
-- Use meaningful alt attributes on all <img> tags (describe what the image would show)
-- Emoji accents are fine sparingly in UI (✓ ★ →) but never as the sole visual indicator
+- Every <img> must have a meaningful alt describing what the photo shows
+- Never use emoji as UI icons — use Lucide icons instead
+- Emoji accents are fine sparingly in text (✓ ★) but not as the only visual element
 
 ═══════════════════════════════════════
 ACCESSIBILITY & SEMANTICS
 ═══════════════════════════════════════
 - Document structure: <header> <nav> <main> <section> <article> <footer>
-- Every image: alt="…"
+- Every image: descriptive alt="…"
 - Interactive elements: aria-label where text is absent, role where needed
 - Keyboard navigable: :focus-visible ring on all focusable elements
 - Colour contrast: text on background must pass WCAG AA (≥ 4.5:1 for body, ≥ 3:1 for large)
@@ -90,12 +158,18 @@ ACCESSIBILITY & SEMANTICS
 QUALITY BAR
 ═══════════════════════════════════════
 Before finalising, mentally review:
-□ Does every section have breathing room (generous padding)?
-□ Is the type scale clearly hierarchical?
-□ Do hover states exist on every interactive element?
-□ Is the layout responsive from 320 px to 1440 px?
-□ Is all copy specific and meaningful (zero placeholders)?
-□ Does the colour palette feel cohesive?
+□ Real <img> tags with unsplash/picsum URLs everywhere (zero CSS/emoji placeholders)?
+□ Lucide loaded in <head>, lucide.createIcons() called in script.js?
+□ AOS loaded in <head>, AOS.init() called, data-aos on every section and card?
+□ Hero headline/subheadline have Animate.css classes?
+□ Hamburger menu works on mobile (toggle + icon swap)?
+□ Smooth scroll + navbar scroll effect implemented?
+□ Every section has breathing room (generous padding)?
+□ Type scale is clearly hierarchical?
+□ Hover states on every interactive element?
+□ Layout responsive from 320 px to 1440 px?
+□ All copy specific and meaningful (zero placeholders)?
+□ Colour palette feels cohesive?
 
 Aim for the output to look like a professional Figma design translated to code — not a template, not a tutorial exercise.`;
 
@@ -110,16 +184,19 @@ const TYPE_PROMPTS: Record<string, string> = {
 PROJECT TYPE: MULTI-SECTION LANDING PAGE
 ═══════════════════════════════════════
 Structure (in this order):
-1. Sticky navbar with logo + navigation links
-2. Hero — full-viewport height, large headline, subheadline, 1–2 CTA buttons, atmospheric background (gradient or subtle pattern)
-3. Features / Benefits — 3–6 cards in a responsive grid with icons (use Unicode/emoji), short titles, 1–2 line descriptions
-4. Pricing — 3 tiers with names, prices, feature lists, and a "Most popular" highlight on the middle tier
-5. Testimonials — 2–3 quote cards with avatar placeholder (coloured circle with initials), name, and role
-6. Final CTA — bold call-to-action section with contrasting background
-7. Footer — logo, nav links, social icons (Unicode), copyright
+1. Sticky navbar with logo + navigation links + hamburger on mobile (Lucide menu/x)
+2. Hero — full-viewport height, real background photo (source.unsplash.com, topic-matched),
+   dark overlay (rgba 0.5), large headline (animate__fadeInDown), subheadline (animate__fadeInUp animate__delay-1s), 1–2 CTA buttons
+3. Features / Benefits — 3–6 cards in a responsive grid, each with:
+   - Lucide icon (relevant to feature), short title, 1–2 line description
+   - data-aos="zoom-in" with staggered data-aos-delay
+4. Pricing — 3 tiers with names, prices, feature lists (Lucide check icons), "Most popular" highlight on middle tier
+5. Testimonials — 2–3 quote cards with picsum avatar images (round, 60px), name, role, data-aos="fade-up"
+6. Final CTA — bold call-to-action section with contrasting background, real background image optional
+7. Footer — logo, nav links, social icons (Lucide), copyright
 
-Each section must have a distinct background (alternate between --color-bg and --color-surface) to create visual rhythm.
-Scroll-reveal (.reveal → .visible) on every section except the hero.`,
+Each section must have a distinct background (alternate --color-bg / --color-surface).
+All sections except hero get data-aos="fade-up".`,
 
   app: `
 ═══════════════════════════════════════
@@ -140,6 +217,8 @@ Required characteristics:
 - Polished loading states, empty states, and error states
 - Every interactive element must have hover/focus styles and smooth transitions
 - App shell: fixed/sticky header with app name and optional nav, main content area, footer
+- Use Lucide icons where appropriate (include the script tag in index.html)
+- AOS for any scroll-reveal elements, Animate.css for entry animations on mount
 
 File structure: index.html (shell + CDN imports), style.css (design system), app.jsx (all React components).`,
 
@@ -149,19 +228,21 @@ PROJECT TYPE: E-COMMERCE / ONLINE STORE
 ═══════════════════════════════════════
 Build a polished product catalogue with shopping cart:
 
-1. Sticky header: store logo, navigation, cart icon with item count badge
-2. Hero banner: promotional headline, discount badge, CTA button
-3. Category filter bar: horizontal scrollable pill buttons to filter products by category (All + 3–4 categories); active category is highlighted
+1. Sticky header: store logo, navigation, cart icon (Lucide shopping-cart) with item count badge
+2. Hero banner: real background photo (source.unsplash.com, shop-theme keywords), promotional headline, discount badge, CTA button
+3. Category filter bar: horizontal scrollable pill buttons (All + 3–4 categories); active category highlighted
 4. Product grid: responsive CSS Grid (1→2→3→4 cols), each card has:
-   - Product image placeholder (coloured rectangle with product emoji/icon)
-   - Product name, short description, price (formatted with currency)
-   - "Add to cart" button with hover lift effect
+   - Real product image: <img src="https://picsum.photos/seed/PRODUCTNAME/400/300" alt="..." loading="lazy">
+   - Product name, short description, price (formatted with currency symbol)
+   - "Add to cart" button with Lucide shopping-cart icon, hover lift effect
    - "Out of stock" state for 1–2 products (disabled button, muted overlay)
-5. Cart sidebar or modal: slides in from the right, lists items with qty controls (+ / −) and remove button, shows subtotal and "Checkout" button
-6. Inventory: pre-populate 8–12 realistic products with names, prices, categories, and descriptions matching the store theme
-7. Footer: store info, links, payment method icons (Unicode)
+   - data-aos="fade-up" with staggered delays
+5. Cart sidebar: slides in from right, lists items with qty controls (+ / −) and Lucide trash-2 remove, subtotal, "Checkout" button
+6. Inventory: pre-populate 8–12 realistic products with names, prices, categories, descriptions
+7. Footer: store info, links, payment method icons (Lucide), copyright
 
-All cart logic (add, remove, qty change, total) implemented in plain JS with localStorage persistence.`,
+All cart logic (add, remove, qty change, total) in plain JS via localStorage.
+On page load: restore cart from localStorage, update badge count.`,
 
   card: `
 ═══════════════════════════════════════
@@ -169,19 +250,19 @@ PROJECT TYPE: DIGITAL BUSINESS CARD (single screen)
 ═══════════════════════════════════════
 Single-page, single-screen (100vh) layout — NO scrolling sections, everything fits above the fold.
 Layout (centred, card-like container max 480 px wide):
-- Avatar: large circle (120 px) with gradient background and initials or emoji icon
+- Avatar: large circle (120 px) with gradient background and initials — or a picsum face photo (object-fit: cover, border-radius: 50%)
 - Name: large display font, prominent
 - Title / role: subtitle in muted colour
 - Bio: 1–2 sentence tagline
-- Contact row: 3–4 icon+text links (email, phone, location, website) — icons via Unicode or simple SVG inline
-- Social links: row of circular icon buttons (LinkedIn, Instagram, GitHub, etc.) with hover colour
+- Contact row: 3–4 icon+text links — use Lucide icons (mail, phone, map-pin, globe)
+- Social links: row of circular icon buttons using Lucide (github, twitter, instagram, linkedin) with hover colour
 - CTA button: "Get in touch" or equivalent, full-width, primary colour
 
 Design notes:
 - Background: subtle gradient or mesh pattern (CSS only)
 - Card has white/surface background, generous padding, rounded-xl, box-shadow
-- Micro-animations: avatar subtle float (CSS keyframe), links stagger in on load
-- Dark/light toggle button in top-right corner (toggle class on <body>)
+- Micro-animations: avatar subtle float (CSS keyframe), links stagger in via animate__animated animate__fadeInUp
+- Dark/light toggle button in top-right corner (Lucide sun/moon, toggle class on <body>)
 - Must look stunning on mobile (320–480 px) — this is the primary viewport`,
 };
 
@@ -305,7 +386,7 @@ Rules:
 - sections: 4–8 items for landing/shop, 3–6 for app, 3–5 for card
 - Each description: max 15 words, specific to the user brief
 - title: specific and on-brand, not generic
-- techNotes: mention relevant tech (React CDN, CSS Grid, localStorage, etc.)
+- techNotes: mention relevant tech (React CDN, CSS Grid, localStorage, AOS, Lucide, Unsplash, etc.)
 - Zero code, zero HTML, zero CSS — structure and intent only`;
 
 export async function generatePlan(
@@ -432,7 +513,14 @@ CRITICAL RULES:
 - Return the COMPLETE content of each modified file (not a diff, not a partial — the full file).
 - If only style.css needs changing, return only style.css.
 - Preserve all existing functionality in unchanged parts of modified files.
-- The JSON structure { files: [{path, content}], message } is identical to generation — do not deviate.`;
+- The JSON structure { files: [{path, content}], message } is identical to generation — do not deviate.
+
+QUALITY PRESERVATION (maintain in every edit):
+- Keep all real <img> tags with unsplash/picsum URLs — never replace with CSS placeholders.
+- Keep Lucide CDN script and all data-lucide icons — keep lucide.createIcons() in script.js.
+- Keep AOS CDN links and Animate.css CDN links — keep AOS.init() and all data-aos attributes.
+- Keep hamburger menu JS, smooth scroll, navbar scroll effect, and any form validation.
+- Only modify what the instruction asks — leave everything else intact.`;
 
 export async function editProject(
   existingFiles: Array<{ path: string; content: string }>,
