@@ -331,6 +331,77 @@ export async function generatePlan(
   return parsed;
 }
 
+const ZEUS_MD_PROMPT = `You are a brand analyst. Given generated HTML/CSS code, extract the brand context as strict JSON.
+
+OUTPUT FORMAT (non-negotiable): respond ONLY with a single valid JSON object, zero markdown outside JSON:
+{
+  "brand": "Project name — one-sentence description",
+  "palette": ["#hex1", "#hex2", "#hex3"],
+  "fonts": ["Display Font", "Body Font"],
+  "tone": "one phrase describing the aesthetic/tone",
+  "sections": ["Section1", "Section2"]
+}
+
+Rules:
+- palette: extract real hex values from :root CSS variables or inline styles (3–6 colors)
+- fonts: extract font family names from Google Fonts <link> or font-family declarations
+- tone: concise aesthetic description (e.g. "dark luxury with golden accents")
+- sections: list of main content sections found in the HTML (from <section> tags or landmark IDs)`;
+
+export async function generateZeusMd(
+  files: Array<{ path: string; content: string }>,
+  projectType: string
+): Promise<string> {
+  const openai = getOpenAIClient();
+
+  const relevantFiles = files
+    .filter((f) => f.path.endsWith(".css") || f.path.endsWith(".html"))
+    .map((f) => `### ${f.path}\n${f.content.slice(0, 4000)}`)
+    .join("\n\n");
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: ZEUS_MD_PROMPT },
+      { role: "user", content: `Project type: ${projectType}\n\n${relevantFiles}` },
+    ],
+    temperature: 0.1,
+    max_tokens: 600,
+  });
+
+  const raw = response.choices[0]?.message?.content ?? "";
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  const parsed = JSON.parse(cleaned) as {
+    brand: string;
+    palette: string[];
+    fonts: string[];
+    tone: string;
+    sections: string[];
+  };
+
+  return [
+    `# zeus.md — Brand Context`,
+    ``,
+    `**Brand:** ${parsed.brand}`,
+    `**Type:** ${projectType}`,
+    `**Tone:** ${parsed.tone}`,
+    ``,
+    `## Colour Palette`,
+    ...(parsed.palette || []).map((c) => `- \`${c}\``),
+    ``,
+    `## Fonts`,
+    ...(parsed.fonts || []).map((f) => `- ${f}`),
+    ``,
+    `## Sections`,
+    ...(parsed.sections || []).map((s) => `- ${s}`),
+  ].join("\n");
+}
+
 export function parseGeneratedOutput(raw: string): GeneratedOutput {
   const cleaned = raw
     .replace(/^```json\s*/i, "")

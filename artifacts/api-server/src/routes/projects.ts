@@ -12,7 +12,7 @@ import {
   ListMessagesParams,
   ListFilesParams,
 } from "@workspace/api-zod";
-import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePlan } from "../lib/openai";
+import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePlan, generateZeusMd } from "../lib/openai";
 import { deployToSandbox } from "../lib/sandbox";
 
 const router = Router();
@@ -167,10 +167,15 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     .from(filesTable)
     .where(eq(filesTable.projectId, params.data.id));
 
+  // Inject zeus.md brand context for repeat iterations
+  const zeusContextBlock = project.zeusContext
+    ? `\n\n[Brand context from zeus.md — maintain these decisions:]\n${project.zeusContext}`
+    : "";
+
   const userMessageContent =
     currentFiles.length > 0
-      ? `${body.data.message}\n\nCurrent project files:\n${currentFiles.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n")}`
-      : body.data.message;
+      ? `${body.data.message}${zeusContextBlock}\n\nCurrent project files:\n${currentFiles.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n")}`
+      : `${body.data.message}${zeusContextBlock}`;
 
   await db.insert(messagesTable).values({
     projectId: params.data.id,
@@ -223,6 +228,11 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     } catch (err) {
       req.log.error({ err }, "Sandbox deployment failed");
     }
+
+    // Generate/update zeus.md brand context (non-blocking)
+    generateZeusMd(generated.files, projectType)
+      .then((ctx) => db.update(projectsTable).set({ zeusContext: ctx }).where(eq(projectsTable.id, params.data.id)))
+      .catch((err) => req.log.warn({ err }, "zeus.md generation failed (non-critical)"));
 
     const updatedFiles = await db.select().from(filesTable).where(eq(filesTable.projectId, params.data.id)).orderBy(asc(filesTable.path));
     res.json({ message: generated.message, files: updatedFiles.map((f) => ({ ...f, updatedAt: f.updatedAt.toISOString() })), previewUrl });
@@ -317,6 +327,11 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
       const sandboxErrMsg = err instanceof Error ? err.message : "Ошибка деплоя в песочницу";
       sendSSE(res, "status", { text: `⚠ Ошибка деплоя: ${sandboxErrMsg}` });
     }
+
+    // Generate/update zeus.md brand context (non-blocking — fires after SSE done)
+    generateZeusMd(generated.files, projectType)
+      .then((ctx) => db.update(projectsTable).set({ zeusContext: ctx }).where(eq(projectsTable.id, params.data.id)))
+      .catch((err) => req.log.warn({ err }, "zeus.md generation failed (non-critical)"));
 
     sendSSE(res, "done", { previewUrl, message: generated.message });
   } catch (err) {

@@ -11,6 +11,7 @@ export const projectsTable = pgTable("projects", {
   projectType: text("project_type").notNull().default("landing"),
   sandboxId: text("sandbox_id"),
   previewUrl: text("preview_url"),
+  zeusContext: text("zeus_context"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
