@@ -180,22 +180,7 @@ export default function Landing() {
             style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700 }}
           >
             <span className="block" style={{ fontWeight: 500, color: "rgba(255,255,255,0.88)" }}>
-              Скажи — и будет сайт.
-            </span>
-            <span className="block">
-              <span style={{ fontWeight: 500, color: "rgba(255,255,255,0.88)" }}>Молниеносно, с&nbsp;</span>
-              <span
-                style={{
-                  fontFamily: "'Playfair Display', Georgia, 'Times New Roman', serif",
-                  fontStyle: "italic",
-                  fontWeight: 400,
-                  fontSize: "1.08em",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                Zeus
-              </span>
-              <span style={{ fontWeight: 500, color: "rgba(255,255,255,0.88)" }}>.</span>
+              Zeus AI — превратит вашу идею в готовый проект.
             </span>
           </h1>
 
