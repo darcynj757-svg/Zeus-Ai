@@ -5,11 +5,11 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 const NAV_LINKS = ["Шаблоны", "Тарифы", "Примеры", "Блог"];
 
-const TABS: Array<{ icon: string; label: string; type: "landing" | "app" | "shop" | "card" }> = [
-  { icon: "🌐", label: "Сайт-лендинг", type: "landing" },
-  { icon: "⚡", label: "Приложение",    type: "app"     },
-  { icon: "🛒", label: "Интернет-магазин", type: "shop" },
-  { icon: "🪪", label: "Визитка",       type: "card"    },
+const TABS: Array<{ icon: string; label: string; type: "landing" | "app" | "shop" | "card"; desc: string }> = [
+  { icon: "🌐", label: "Сайт-лендинг",    type: "landing", desc: "Многосекционный сайт: hero, преимущества, цены, отзывы, footer" },
+  { icon: "⚡", label: "Приложение",       type: "app",     desc: "SPA на React с состоянием, localStorage и несколькими экранами" },
+  { icon: "🛒", label: "Интернет-магазин", type: "shop",    desc: "Каталог товаров с фильтрами, корзиной и оформлением заказа" },
+  { icon: "🪪", label: "Визитка",          type: "card",    desc: "Одностраничная визитка: контакты, соцсети, кнопка «Связаться»" },
 ];
 
 const CHIP_PROMPTS = [
@@ -193,20 +193,36 @@ export default function Landing() {
             Опишите идею своими словами — Zeus напишет код и покажет готовый результат за минуты.
           </p>
 
-          {/* TABS */}
-          <div className="flex flex-wrap justify-center gap-2">
+          {/* TYPE CARDS */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full max-w-2xl">
             {TABS.map((tab, i) => (
               <button
-                key={tab.label}
+                key={tab.type}
                 onClick={() => setActiveTab(i)}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                className={`group flex flex-col items-start gap-2 rounded-xl border p-3.5 text-left transition-all duration-200 ${
                   activeTab === i
-                    ? "bg-white/[0.10] border-white/[0.22] text-white"
-                    : "bg-transparent border-white/[0.08] text-white/38 hover:border-white/[0.15] hover:text-white/58"
+                    ? "bg-white/[0.08] border-white/[0.28] shadow-[0_0_0_1px_rgba(255,255,255,0.10)] shadow-violet-500/10"
+                    : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.16]"
                 }`}
               >
-                <span className="text-base leading-none">{tab.icon}</span>
-                {tab.label}
+                <span className="text-2xl leading-none">{tab.icon}</span>
+                <span
+                  className={`text-sm font-semibold leading-tight transition-colors ${
+                    activeTab === i ? "text-white" : "text-white/60 group-hover:text-white/80"
+                  }`}
+                >
+                  {tab.label}
+                </span>
+                <span
+                  className={`text-[11px] leading-snug transition-colors ${
+                    activeTab === i ? "text-white/50" : "text-white/25 group-hover:text-white/38"
+                  }`}
+                >
+                  {tab.desc}
+                </span>
+                {activeTab === i && (
+                  <span className="mt-auto self-end w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+                )}
               </button>
             ))}
           </div>
