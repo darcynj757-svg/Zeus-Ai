@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { eq, asc } from "drizzle-orm";
+import { ZipArchive } from "archiver";
 import { db, projectsTable, messagesTable, filesTable } from "@workspace/db";
 import {
   CreateProjectBody,
@@ -305,6 +306,51 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
   } finally {
     res.end();
   }
+});
+
+// GET /projects/:id/download
+router.get("/projects/:id/download", async (req, res): Promise<void> => {
+  const params = GetProjectParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [project] = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.id, params.data.id));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  const files = await db
+    .select()
+    .from(filesTable)
+    .where(eq(filesTable.projectId, params.data.id))
+    .orderBy(asc(filesTable.path));
+
+  if (files.length === 0) {
+    res.status(400).json({ error: "Проект не содержит файлов" });
+    return;
+  }
+
+  const safeName = project.name.replace(/[^a-z0-9_\-]/gi, "_").replace(/_+/g, "_").slice(0, 40).replace(/^_+|_+$/g, "") || "project";
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}.zip"`);
+
+  const archive = new ZipArchive({ zlib: { level: 6 } });
+  archive.on("error", (err: Error) => {
+    req.log.error({ err }, "Archive error");
+    if (!res.headersSent) res.status(500).json({ error: "Ошибка создания архива" });
+  });
+
+  archive.pipe(res);
+  for (const file of files) {
+    archive.append(file.content, { name: file.path });
+  }
+  await archive.finalize();
 });
 
 // POST /projects/:id/sandbox/refresh

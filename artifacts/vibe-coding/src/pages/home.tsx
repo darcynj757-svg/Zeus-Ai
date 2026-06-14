@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2,
-  Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2, RotateCcw,
+  Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2, RotateCcw, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Highlight, themes } from "prism-react-renderer";
@@ -148,6 +148,33 @@ function RightPanel({
         },
       }
     );
+  };
+
+  const handleDownloadZip = async (id: number) => {
+    try {
+      toast.loading("Готовлю архив…", { id: "download-zip" });
+      const response = await fetch(`/api/projects/${id}/download`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: "Ошибка загрузки" }));
+        throw new Error(err.error ?? "Ошибка загрузки");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : "project.zip";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Архив скачан!", { id: "download-zip" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Ошибка скачивания", {
+        id: "download-zip",
+        duration: 6000,
+      });
+    }
   };
 
   return (
@@ -278,24 +305,36 @@ function RightPanel({
 
       {tab === "code" && (
         <div className="flex flex-1 flex-col min-h-0">
-          <div className="flex h-9 items-center overflow-x-auto border-b border-border bg-sidebar shrink-0 no-scrollbar">
-            {(!files || files.length === 0) && (
-              <div className="px-4 text-xs text-muted-foreground font-mono">Файлов пока нет</div>
-            )}
-            {files?.map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setActiveFile(f.path)}
-                className={`flex items-center gap-2 h-full px-4 text-xs font-mono border-r border-sidebar-border transition-colors whitespace-nowrap ${
-                  activeFile === f.path
-                    ? "bg-background text-primary border-t-2 border-t-primary"
-                    : "text-muted-foreground hover:bg-background/50 hover:text-foreground border-t-2 border-t-transparent"
-                }`}
-              >
-                <FileCode2 className="h-3.5 w-3.5 shrink-0" />
-                {f.path.split("/").pop()}
-              </button>
-            ))}
+          <div className="flex h-9 items-center border-b border-border bg-sidebar shrink-0 gap-1 pr-2">
+            <div className="flex flex-1 h-full items-center overflow-x-auto no-scrollbar">
+              {(!files || files.length === 0) && (
+                <div className="px-4 text-xs text-muted-foreground font-mono">Файлов пока нет</div>
+              )}
+              {files?.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setActiveFile(f.path)}
+                  className={`flex items-center gap-2 h-full px-4 text-xs font-mono border-r border-sidebar-border transition-colors whitespace-nowrap ${
+                    activeFile === f.path
+                      ? "bg-background text-primary border-t-2 border-t-primary"
+                      : "text-muted-foreground hover:bg-background/50 hover:text-foreground border-t-2 border-t-transparent"
+                  }`}
+                >
+                  <FileCode2 className="h-3.5 w-3.5 shrink-0" />
+                  {f.path.split("/").pop()}
+                </button>
+              ))}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-primary"
+              disabled={!hasFiles}
+              title={hasFiles ? "Скачать ZIP" : "Сначала сгенерируй код"}
+              onClick={() => handleDownloadZip(projectId)}
+            >
+              <Download className="h-3.5 w-3.5" />
+            </Button>
           </div>
           <div className="flex-1 overflow-auto bg-[#0d0d0f] relative text-sm">
             {currentFile ? (
