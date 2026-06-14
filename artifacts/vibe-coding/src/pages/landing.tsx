@@ -193,42 +193,27 @@ export default function Landing() {
             Опишите идею своими словами — Zeus напишет код и покажет готовый результат за минуты.
           </p>
 
-          {/* TYPE CARDS */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full max-w-2xl">
-            {TABS.map((tab, i) => (
-              <button
-                key={tab.type}
-                onClick={() => setActiveTab(i)}
-                className={`group flex flex-col items-start gap-2 rounded-xl border p-3.5 text-left transition-all duration-200 ${
-                  activeTab === i
-                    ? "bg-white/[0.08] border-white/[0.28] shadow-[0_0_0_1px_rgba(255,255,255,0.10)] shadow-violet-500/10"
-                    : "bg-white/[0.03] border-white/[0.07] hover:bg-white/[0.06] hover:border-white/[0.16]"
-                }`}
-              >
-                <span className="text-2xl leading-none">{tab.icon}</span>
-                <span
-                  className={`text-sm font-semibold leading-tight transition-colors ${
-                    activeTab === i ? "text-white" : "text-white/60 group-hover:text-white/80"
-                  }`}
-                >
-                  {tab.label}
-                </span>
-                <span
-                  className={`text-[11px] leading-snug transition-colors ${
-                    activeTab === i ? "text-white/50" : "text-white/25 group-hover:text-white/38"
-                  }`}
-                >
-                  {tab.desc}
-                </span>
-                {activeTab === i && (
-                  <span className="mt-auto self-end w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
-                )}
-              </button>
-            ))}
-          </div>
-
           {/* INPUT BOX */}
           <div className="w-full max-w-2xl rounded-2xl bg-white/[0.05] border border-white/[0.10] hover:border-white/[0.17] focus-within:border-white/[0.24] transition-colors shadow-2xl shadow-black/50">
+
+            {/* TYPE TABS — inside the box, above textarea */}
+            <div className="flex items-center gap-1 px-3 pt-3 pb-1 overflow-x-auto no-scrollbar">
+              {TABS.map((tab, i) => (
+                <button
+                  key={tab.type}
+                  onClick={() => setActiveTab(i)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium whitespace-nowrap border transition-all duration-150 shrink-0 ${
+                    activeTab === i
+                      ? "bg-white/[0.10] border-white/[0.20] text-white"
+                      : "bg-transparent border-transparent text-white/38 hover:text-white/65 hover:bg-white/[0.05]"
+                  }`}
+                >
+                  <span className="text-sm leading-none">{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
             <textarea
               ref={textareaRef}
               value={prompt}
