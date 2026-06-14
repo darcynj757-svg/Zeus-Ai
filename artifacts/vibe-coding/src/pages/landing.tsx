@@ -21,89 +21,37 @@ const CHIP_PROMPTS = [
 
 type ThemeMode = "monitor" | "sun" | "moon";
 
-function ZeusLogo({ size = 32 }: { size?: number }) {
+/* Полный горизонтальный логотип (лицо + текст) */
+function ZeusLogoFull({ height = 32 }: { height?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <linearGradient id="zeusGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#6d28d9" />
-          <stop offset="1" stopColor="#2563eb" />
-        </linearGradient>
-      </defs>
+    <img
+      src="/logo.png"
+      alt="Zeus AI"
+      style={{ height: height, width: "auto", display: "block" }}
+    />
+  );
+}
 
-      {/* Circle background */}
-      <circle cx="24" cy="24" r="23" fill="url(#zeusGrad)" />
-
-      {/* Head + 3-point beard silhouette */}
-      <path
-        d="M 24 6
-           A 10 12 0 0 1 34 18
-           C 34 23 33.5 26 33 29
-           Q 37 37 31 40
-           L 27.5 33.5
-           L 24 44
-           L 20.5 33.5
-           Q 13 37 15 29
-           C 14.5 26 14 23 14 18
-           A 10 12 0 0 1 24 6 Z"
-        fill="white"
-        opacity="0.95"
+/* Маленькая иконка — обрезает логотип до лицевой части */
+function ZeusLogoIcon({ size = 24 }: { size?: number }) {
+  return (
+    <div style={{
+      width: size,
+      height: size,
+      overflow: "hidden",
+      flexShrink: 0,
+    }}>
+      <img
+        src="/logo.png"
+        alt="Zeus AI"
+        style={{
+          height: size,
+          width: "auto",
+          objectFit: "cover",
+          objectPosition: "left center",
+        }}
       />
-
-      {/* Eyes (gradient color punched through) */}
-      <circle cx="20" cy="18" r="1.6" fill="url(#zeusGrad)" />
-      <circle cx="28" cy="18" r="1.6" fill="url(#zeusGrad)" />
-
-      {/* Nose */}
-      <path
-        d="M 23.5 20 L 22 24.5 L 25.5 24.5"
-        stroke="url(#zeusGrad)"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      {/* Mouth — slight smile */}
-      <path
-        d="M 20.5 27 Q 24 29 27.5 27"
-        stroke="url(#zeusGrad)"
-        strokeWidth="1.1"
-        strokeLinecap="round"
-      />
-
-      {/* Laurel wreath — left leaf */}
-      <path
-        d="M 15 10 Q 12 8 14 5.5 Q 16 3.5 17 7"
-        stroke="rgba(255,255,255,0.55)"
-        strokeWidth="1.1"
-        fill="none"
-        strokeLinecap="round"
-      />
-      {/* Laurel wreath — right leaf */}
-      <path
-        d="M 33 10 Q 36 8 34 5.5 Q 32 3.5 31 7"
-        stroke="rgba(255,255,255,0.55)"
-        strokeWidth="1.1"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Small lightning bolt — top right accent */}
-      <path
-        d="M 39 5.5 L 37 10 L 39.5 10 L 37 15"
-        stroke="rgba(255,240,120,0.85)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-    </svg>
+    </div>
   );
 }
 
@@ -145,14 +93,8 @@ export default function Landing() {
       {/* FIXED HEADER */}
       <header className="fixed top-0 inset-x-0 z-50 flex h-14 items-center justify-between px-5 md:px-8 bg-[#0a0a0f]/85 backdrop-blur-xl border-b border-white/[0.06]">
         {/* Logo */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <ZeusLogo size={34} />
-          <span
-            className="font-bold text-[15px] tracking-tight text-white"
-            style={{ fontFamily: "'Manrope', sans-serif" }}
-          >
-            Zeus AI
-          </span>
+        <div className="flex items-center shrink-0">
+          <ZeusLogoFull height={30} />
         </div>
 
         {/* Nav */}
@@ -312,7 +254,7 @@ export default function Landing() {
                   <Plus className="h-3.5 w-3.5" />
                 </button>
                 <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.10] text-white/45 hover:text-white/75 transition-all text-xs font-medium">
-                  <ZeusLogo size={13} />
+                  <ZeusLogoIcon size={13} />
                   Zeus 1.0
                   <ChevronDown className="h-3 w-3 opacity-50" />
                 </button>
