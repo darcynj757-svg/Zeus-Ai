@@ -29,21 +29,28 @@ Respond ONLY with a single valid JSON object. Zero markdown, zero prose outside 
 CDN WHITELIST (only these external domains allowed)
 ═══════════════════════════════════════
 Allowed: fonts.googleapis.com, fonts.gstatic.com, unpkg.com, cdn.jsdelivr.net,
-         cdnjs.cloudflare.com, source.unsplash.com, images.unsplash.com, picsum.photos
-NEVER use any other external domain for scripts, styles, fonts, or images.
+         cdnjs.cloudflare.com, loremflickr.com, images.unsplash.com, picsum.photos
+NEVER use source.unsplash.com (deprecated, returns 503). NEVER use any other external domain for scripts, styles, fonts, or images.
 
 ═══════════════════════════════════════
 IMAGES (mandatory — no CSS/emoji placeholders)
 ═══════════════════════════════════════
 - ALWAYS use real <img> tags with actual photo URLs — never coloured div/CSS-only placeholders
-- Hero backgrounds: use a real photo via CSS background-image or <img>:
-    background-image: url('https://source.unsplash.com/1600x900/?TOPIC,KEYWORDS');
-  or place an <img src="https://source.unsplash.com/1600x900/?TOPIC,KEYWORDS" alt="..." loading="lazy">
-- Section/card images: https://picsum.photos/seed/UNIQUESEED/WIDTH/HEIGHT (vary seed per image)
+- Hero backgrounds — use loremflickr for keyword-matched photos (single keyword, no spaces):
+    background-image: url('https://loremflickr.com/1600/900/KEYWORD');
+  or: <img src="https://loremflickr.com/1600/900/KEYWORD" alt="..." loading="lazy" onerror="this.onerror=null;this.src='https://picsum.photos/seed/hero/1600/900'">
+- Topic/section photos (keyword-matched): https://loremflickr.com/800/600/KEYWORD
+    e.g. loremflickr.com/800/600/coffee, loremflickr.com/400/300/restaurant
+- Section/card images (neutral): https://picsum.photos/seed/UNIQUESEED/WIDTH/HEIGHT (vary seed per image)
     e.g. picsum.photos/seed/cafe1/600/400, picsum.photos/seed/cafe2/600/400
-- Topic photos: https://source.unsplash.com/800x600/?coffee,latte (comma-separated keywords matching the theme)
-- Every <img> must have: meaningful alt="…" describing the scene, loading="lazy", CSS object-fit: cover
+- Specific curated photos: https://images.unsplash.com/photo-<ID>?w=1600&q=80 (only with known IDs)
+- Every <img> MUST have:
+    1. meaningful alt="…" describing the scene
+    2. loading="lazy"
+    3. CSS object-fit: cover
+    4. onerror fallback: onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/800/600'"
 - Image containers must have explicit height (e.g. height: 260px) so images display correctly
+- NEVER use source.unsplash.com — it is deprecated and returns HTTP 503
 
 ═══════════════════════════════════════
 ICONS (Lucide CDN — mandatory, no Unicode/emoji for UI icons)
@@ -158,7 +165,8 @@ ACCESSIBILITY & SEMANTICS
 QUALITY BAR
 ═══════════════════════════════════════
 Before finalising, mentally review:
-□ Real <img> tags with unsplash/picsum URLs everywhere (zero CSS/emoji placeholders)?
+□ Real <img> tags with loremflickr/picsum URLs everywhere (zero CSS/emoji placeholders, zero source.unsplash.com)?
+□ Every <img> has onerror fallback to picsum so broken images never show empty boxes?
 □ Lucide loaded in <head>, lucide.createIcons() called in script.js?
 □ AOS loaded in <head>, AOS.init() called, data-aos on every section and card?
 □ Hero headline/subheadline have Animate.css classes?
@@ -185,8 +193,9 @@ PROJECT TYPE: MULTI-SECTION LANDING PAGE
 ═══════════════════════════════════════
 Structure (in this order):
 1. Sticky navbar with logo + navigation links + hamburger on mobile (Lucide menu/x)
-2. Hero — full-viewport height, real background photo (source.unsplash.com, topic-matched),
-   dark overlay (rgba 0.5), large headline (animate__fadeInDown), subheadline (animate__fadeInUp animate__delay-1s), 1–2 CTA buttons
+2. Hero — full-viewport height, real background photo (loremflickr.com, single keyword topic-matched,
+   e.g. https://loremflickr.com/1600/900/coffee), dark overlay (rgba 0.5), large headline (animate__fadeInDown),
+   subheadline (animate__fadeInUp animate__delay-1s), 1–2 CTA buttons; hero <img> must have onerror fallback
 3. Features / Benefits — 3–6 cards in a responsive grid, each with:
    - Lucide icon (relevant to feature), short title, 1–2 line description
    - data-aos="zoom-in" with staggered data-aos-delay
@@ -229,7 +238,8 @@ PROJECT TYPE: E-COMMERCE / ONLINE STORE
 Build a polished product catalogue with shopping cart:
 
 1. Sticky header: store logo, navigation, cart icon (Lucide shopping-cart) with item count badge
-2. Hero banner: real background photo (source.unsplash.com, shop-theme keywords), promotional headline, discount badge, CTA button
+2. Hero banner: real background photo (loremflickr.com, single shop-theme keyword, e.g. https://loremflickr.com/1600/900/shopping),
+   promotional headline, discount badge, CTA button; hero <img> must have onerror fallback
 3. Category filter bar: horizontal scrollable pill buttons (All + 3–4 categories); active category highlighted
 4. Product grid: responsive CSS Grid (1→2→3→4 cols), each card has:
    - Real product image: <img src="https://picsum.photos/seed/PRODUCTNAME/400/300" alt="..." loading="lazy">
@@ -386,7 +396,7 @@ Rules:
 - sections: 4–8 items for landing/shop, 3–6 for app, 3–5 for card
 - Each description: max 15 words, specific to the user brief
 - title: specific and on-brand, not generic
-- techNotes: mention relevant tech (React CDN, CSS Grid, localStorage, AOS, Lucide, Unsplash, etc.)
+- techNotes: mention relevant tech (React CDN, CSS Grid, localStorage, AOS, Lucide, loremflickr, picsum, etc.)
 - Zero code, zero HTML, zero CSS — structure and intent only`;
 
 export async function generatePlan(
@@ -516,7 +526,8 @@ CRITICAL RULES:
 - The JSON structure { files: [{path, content}], message } is identical to generation — do not deviate.
 
 QUALITY PRESERVATION (maintain in every edit):
-- Keep all real <img> tags with unsplash/picsum URLs — never replace with CSS placeholders.
+- Keep all real <img> tags with loremflickr/picsum/images.unsplash URLs — never replace with CSS placeholders. Never introduce source.unsplash.com (returns 503).
+- Keep onerror fallback on every <img>: onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/800/600'"
 - Keep Lucide CDN script and all data-lucide icons — keep lucide.createIcons() in script.js.
 - Keep AOS CDN links and Animate.css CDN links — keep AOS.init() and all data-aos attributes.
 - Keep hamburger menu JS, smooth scroll, navbar scroll effect, and any form validation.
