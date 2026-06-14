@@ -167,8 +167,8 @@ export default function Landing() {
 
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.10] text-sm text-white/65 hover:border-white/20 transition-colors cursor-default">
-            <span className="px-1.5 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-bold tracking-wider uppercase">
-              NEW
+            <span className="px-1.5 py-0.5 rounded-full bg-sky-500 text-white text-[12px] font-bold">
+              ⚡
             </span>
             <span>· Быстро · просто · без знаний программирования ·</span>
             <span className="text-white/30">→</span>
