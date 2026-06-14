@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Monitor, Sun, Moon, Mic, MicOff, ArrowUp, Plus, ChevronDown, Zap } from "lucide-react";
+import { Monitor, Sun, Moon, Mic, MicOff, ArrowUp, Plus, ChevronDown } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 const NAV_LINKS = ["Шаблоны", "Тарифы", "Примеры", "Блог"];
@@ -21,17 +21,88 @@ const CHIP_PROMPTS = [
 
 type ThemeMode = "monitor" | "sun" | "moon";
 
-function ZeusLogo({ size = 28 }: { size?: number }) {
+function ZeusLogo({ size = 32 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <defs>
-        <linearGradient id="lg1" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#7c3aed" />
-          <stop offset="1" stopColor="#3b82f6" />
+        <linearGradient id="zeusGrad" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#6d28d9" />
+          <stop offset="1" stopColor="#2563eb" />
         </linearGradient>
       </defs>
-      <circle cx="24" cy="24" r="23" fill="url(#lg1)" />
-      <polygon points="27,6 16,26 23,26 21,42 32,22 25,22" fill="white" opacity="0.95" />
+
+      {/* Circle background */}
+      <circle cx="24" cy="24" r="23" fill="url(#zeusGrad)" />
+
+      {/* Head + 3-point beard silhouette */}
+      <path
+        d="M 24 6
+           A 10 12 0 0 1 34 18
+           C 34 23 33.5 26 33 29
+           Q 37 37 31 40
+           L 27.5 33.5
+           L 24 44
+           L 20.5 33.5
+           Q 13 37 15 29
+           C 14.5 26 14 23 14 18
+           A 10 12 0 0 1 24 6 Z"
+        fill="white"
+        opacity="0.95"
+      />
+
+      {/* Eyes (gradient color punched through) */}
+      <circle cx="20" cy="18" r="1.6" fill="url(#zeusGrad)" />
+      <circle cx="28" cy="18" r="1.6" fill="url(#zeusGrad)" />
+
+      {/* Nose */}
+      <path
+        d="M 23.5 20 L 22 24.5 L 25.5 24.5"
+        stroke="url(#zeusGrad)"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Mouth — slight smile */}
+      <path
+        d="M 20.5 27 Q 24 29 27.5 27"
+        stroke="url(#zeusGrad)"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+
+      {/* Laurel wreath — left leaf */}
+      <path
+        d="M 15 10 Q 12 8 14 5.5 Q 16 3.5 17 7"
+        stroke="rgba(255,255,255,0.55)"
+        strokeWidth="1.1"
+        fill="none"
+        strokeLinecap="round"
+      />
+      {/* Laurel wreath — right leaf */}
+      <path
+        d="M 33 10 Q 36 8 34 5.5 Q 32 3.5 31 7"
+        stroke="rgba(255,255,255,0.55)"
+        strokeWidth="1.1"
+        fill="none"
+        strokeLinecap="round"
+      />
+
+      {/* Small lightning bolt — top right accent */}
+      <path
+        d="M 39 5.5 L 37 10 L 39.5 10 L 37 15"
+        stroke="rgba(255,240,120,0.85)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   );
 }
@@ -58,38 +129,40 @@ export default function Landing() {
     }
   };
 
-  const cycleTheme = (mode: ThemeMode) => setThemeMode(mode);
-
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 220) + "px";
+      textareaRef.current.style.height =
+        Math.min(textareaRef.current.scrollHeight, 220) + "px";
     }
   }, [prompt]);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white flex flex-col antialiased">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital@1&display=swap');
-        .zeus-italic { font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; font-style: italic; }
-      `}</style>
-
+    <div
+      className="min-h-screen bg-[#0a0a0f] text-white flex flex-col antialiased"
+      style={{ fontFamily: "'Manrope', 'Inter', system-ui, sans-serif" }}
+    >
       {/* FIXED HEADER */}
-      <header className="fixed top-0 inset-x-0 z-50 flex h-14 items-center justify-between px-6 bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-white/5">
+      <header className="fixed top-0 inset-x-0 z-50 flex h-14 items-center justify-between px-5 md:px-8 bg-[#0a0a0f]/85 backdrop-blur-xl border-b border-white/[0.06]">
         {/* Logo */}
-        <div className="flex items-center gap-2 shrink-0">
-          <ZeusLogo size={26} />
-          <span className="font-bold text-base tracking-tight text-white">Zeus AI</span>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <ZeusLogo size={34} />
+          <span
+            className="font-bold text-[15px] tracking-tight text-white"
+            style={{ fontFamily: "'Manrope', sans-serif" }}
+          >
+            Zeus AI
+          </span>
         </div>
 
         {/* Nav */}
-        <nav className="hidden md:flex items-center gap-6">
+        <nav className="hidden md:flex items-center gap-7">
           {NAV_LINKS.map((link) => (
             <a
               key={link}
               href="#"
               onClick={(e) => e.preventDefault()}
-              className="text-sm text-white/50 hover:text-white/90 transition-colors"
+              className="text-sm text-white/45 hover:text-white/85 transition-colors"
             >
               {link}
             </a>
@@ -98,8 +171,7 @@ export default function Landing() {
 
         {/* Right */}
         <div className="flex items-center gap-3 shrink-0">
-          {/* Theme toggle */}
-          <div className="hidden sm:flex items-center gap-0.5 bg-white/5 border border-white/8 rounded-lg p-0.5">
+          <div className="hidden sm:flex items-center gap-0.5 bg-white/[0.05] border border-white/[0.08] rounded-lg p-0.5">
             {(
               [
                 { mode: "monitor" as ThemeMode, Icon: Monitor },
@@ -109,23 +181,27 @@ export default function Landing() {
             ).map(({ mode, Icon }) => (
               <button
                 key={mode}
-                onClick={() => cycleTheme(mode)}
+                onClick={() => setThemeMode(mode)}
                 className={`p-1.5 rounded-md transition-all ${
                   themeMode === mode
                     ? "bg-white/10 text-white"
-                    : "text-white/30 hover:text-white/60"
+                    : "text-white/25 hover:text-white/55"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
               </button>
             ))}
           </div>
-          <a href="#" onClick={(e) => e.preventDefault()} className="text-sm text-white/60 hover:text-white transition-colors">
+          <a
+            href="#"
+            onClick={(e) => e.preventDefault()}
+            className="text-sm text-white/55 hover:text-white transition-colors"
+          >
             Войти
           </a>
           <button
             onClick={() => goToApp()}
-            className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-white text-black hover:bg-white/90 transition-all"
+            className="text-sm font-semibold px-4 py-1.5 rounded-lg bg-white text-[#0a0a0f] hover:bg-white/90 transition-all"
           >
             Начать бесплатно
           </button>
@@ -135,33 +211,62 @@ export default function Landing() {
       {/* MAIN */}
       <main className="flex-1 flex flex-col items-center justify-center pt-14 px-4 relative overflow-hidden">
         {/* Background glow */}
-        <div className="pointer-events-none absolute inset-0 flex items-start justify-center">
-          <div className="mt-8 w-[800px] h-[500px] rounded-full bg-[radial-gradient(ellipse_at_center,_rgba(99,_73,_209,_0.18)_0%,_rgba(59,_130,_246,_0.08)_45%,_transparent_70%)] blur-[1px]" />
+        <div className="pointer-events-none absolute inset-0 flex items-start justify-center overflow-hidden">
+          <div
+            className="mt-[-60px] w-[900px] h-[600px] rounded-full blur-[2px]"
+            style={{
+              background:
+                "radial-gradient(ellipse at center, rgba(109,40,217,0.20) 0%, rgba(37,99,235,0.09) 45%, transparent 70%)",
+            }}
+          />
         </div>
 
-        <div className="relative z-10 flex flex-col items-center text-center w-full max-w-3xl mx-auto py-20 gap-8">
+        <div className="relative z-10 flex flex-col items-center text-center w-full max-w-3xl mx-auto py-16 gap-7">
 
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-sm text-white/70 hover:border-white/20 transition-colors cursor-default">
-            <span className="px-1.5 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-bold tracking-wide uppercase">NEW</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.10] text-sm text-white/65 hover:border-white/20 transition-colors cursor-default">
+            <span className="px-1.5 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-bold tracking-wider uppercase">
+              NEW
+            </span>
             <span>Голосовой ввод уже работает</span>
-            <span className="text-white/40">→</span>
+            <span className="text-white/30">→</span>
           </div>
 
           {/* Hero heading */}
-          <h1 className="text-[56px] sm:text-[72px] md:text-[88px] leading-[1.05] font-bold tracking-tight text-white">
-            <span className="block font-normal text-white/90">Не просто придумай —</span>
+          <h1
+            className="text-[52px] sm:text-[70px] md:text-[88px] leading-[1.02] tracking-tight text-white"
+            style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700 }}
+          >
+            <span className="block" style={{ fontWeight: 500, color: "rgba(255,255,255,0.88)" }}>
+              Скажи — и будет сайт.
+            </span>
             <span className="block">
-              <span className="zeus-italic font-normal" style={{ fontSize: "1.1em" }}>Zeus</span>
-              <span className="font-bold"> соберёт</span>
+              <span style={{ fontWeight: 500, color: "rgba(255,255,255,0.88)" }}>Молниеносно, с&nbsp;</span>
+              <span
+                style={{
+                  fontFamily: "'Playfair Display', Georgia, 'Times New Roman', serif",
+                  fontStyle: "italic",
+                  fontWeight: 400,
+                  fontSize: "1.08em",
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Zeus
+              </span>
+              <span style={{ fontWeight: 500, color: "rgba(255,255,255,0.88)" }}>.</span>
             </span>
           </h1>
 
           {/* Subtitle */}
-          <p className="text-base sm:text-lg text-white/45 leading-relaxed max-w-xl">
-            Создавай сайты и приложения за минуты — просто опиши словами.
-            <br />
-            Всё включено: код, превью и публикация.
+          <p
+            className="text-base sm:text-lg leading-relaxed max-w-xl"
+            style={{ color: "rgba(255,255,255,0.40)", fontWeight: 400 }}
+          >
+            Опиши идею простыми словами — Zeus призовёт код, превью
+            <br className="hidden sm:block" />
+            и публикацию за минуты. Без программистов, без боли,
+            <br className="hidden sm:block" />
+            без танцев с бубном.
           </p>
 
           {/* TABS */}
@@ -172,8 +277,8 @@ export default function Landing() {
                 onClick={() => setActiveTab(i)}
                 className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
                   activeTab === i
-                    ? "bg-white/10 border-white/20 text-white"
-                    : "bg-transparent border-white/8 text-white/40 hover:border-white/15 hover:text-white/60"
+                    ? "bg-white/[0.10] border-white/[0.22] text-white"
+                    : "bg-transparent border-white/[0.08] text-white/38 hover:border-white/[0.15] hover:text-white/58"
                 }`}
               >
                 <span className="text-base leading-none">{tab.icon}</span>
@@ -183,7 +288,7 @@ export default function Landing() {
           </div>
 
           {/* INPUT BOX */}
-          <div className="w-full max-w-2xl rounded-2xl bg-white/[0.05] border border-white/10 hover:border-white/18 focus-within:border-white/25 transition-colors shadow-2xl shadow-black/40">
+          <div className="w-full max-w-2xl rounded-2xl bg-white/[0.05] border border-white/[0.10] hover:border-white/[0.17] focus-within:border-white/[0.24] transition-colors shadow-2xl shadow-black/50">
             <textarea
               ref={textareaRef}
               value={prompt}
@@ -191,25 +296,29 @@ export default function Landing() {
               onKeyDown={handleKeyDown}
               placeholder="Опиши, что хочешь создать…"
               rows={3}
-              className="w-full bg-transparent text-white placeholder-white/25 text-base p-5 pb-2 resize-none outline-none font-sans leading-relaxed"
-              style={{ minHeight: 80, maxHeight: 220 }}
+              className="w-full bg-transparent text-white placeholder-white/22 text-[15px] p-5 pb-2 resize-none outline-none leading-relaxed"
+              style={{
+                minHeight: 86,
+                maxHeight: 220,
+                fontFamily: "'Manrope', sans-serif",
+              }}
             />
 
             {/* Bottom bar */}
             <div className="flex items-center justify-between px-4 pb-3 pt-1 gap-2">
-              {/* Left: + and model */}
+              {/* Left */}
               <div className="flex items-center gap-2">
-                <button className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/6 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/80 transition-all">
+                <button className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.10] text-white/45 hover:text-white/75 transition-all">
                   <Plus className="h-3.5 w-3.5" />
                 </button>
-                <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/6 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/80 transition-all text-xs font-medium">
-                  <Zap className="h-3 w-3 text-violet-400" />
+                <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.10] text-white/45 hover:text-white/75 transition-all text-xs font-medium">
+                  <ZeusLogo size={13} />
                   Zeus 1.0
-                  <ChevronDown className="h-3 w-3 opacity-60" />
+                  <ChevronDown className="h-3 w-3 opacity-50" />
                 </button>
               </div>
 
-              {/* Right: mic + send */}
+              {/* Right */}
               <div className="flex items-center gap-2">
                 {speech.isSupported && (
                   <button
@@ -218,17 +327,21 @@ export default function Landing() {
                     className={`flex items-center justify-center w-8 h-8 rounded-full border transition-all ${
                       speech.isListening
                         ? "bg-red-500/15 border-red-500/40 text-red-400 animate-pulse"
-                        : "bg-white/6 border-white/10 text-white/40 hover:text-white/70 hover:border-white/20"
+                        : "bg-white/[0.06] border-white/[0.10] text-white/38 hover:text-white/68 hover:border-white/20"
                     }`}
                   >
-                    {speech.isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    {speech.isListening ? (
+                      <MicOff className="h-4 w-4" />
+                    ) : (
+                      <Mic className="h-4 w-4" />
+                    )}
                   </button>
                 )}
                 <button
                   onClick={() => goToApp()}
                   disabled={!prompt.trim()}
-                  title="Отправить"
-                  className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-all shadow-lg shadow-violet-900/40"
+                  title="Создать"
+                  className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 disabled:opacity-25 disabled:cursor-not-allowed text-white transition-all shadow-lg shadow-violet-900/40"
                 >
                   <ArrowUp className="h-4 w-4" />
                 </button>
@@ -237,7 +350,7 @@ export default function Landing() {
 
             {/* Listening indicator */}
             {speech.isListening && (
-              <div className="flex items-center gap-1.5 text-xs text-red-400 px-4 pb-2">
+              <div className="flex items-center gap-1.5 text-xs text-red-400 px-4 pb-2.5">
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-400" />
@@ -248,12 +361,12 @@ export default function Landing() {
           </div>
 
           {/* CHIP PROMPTS */}
-          <div className="flex flex-wrap justify-center gap-2 mt-1">
+          <div className="flex flex-wrap justify-center gap-2 -mt-1">
             {CHIP_PROMPTS.map((chip) => (
               <button
                 key={chip.label}
                 onClick={() => goToApp(chip.text)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-transparent border border-white/8 text-white/40 text-xs hover:border-white/18 hover:text-white/65 hover:bg-white/4 transition-all"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-transparent border border-white/[0.08] text-white/38 text-xs hover:border-white/[0.17] hover:text-white/62 hover:bg-white/[0.04] transition-all"
               >
                 <span>{chip.emoji}</span>
                 {chip.label}
@@ -264,8 +377,12 @@ export default function Landing() {
       </main>
 
       {/* FOOTER */}
-      <footer className="py-5 text-center text-xs text-white/20 border-t border-white/5">
-        Сделано с ⚡ на <span className="text-white/35">Zeus AI</span>
+      <footer className="py-5 text-center text-xs text-white/18 border-t border-white/[0.05]">
+        Сделано с ⚡ на{" "}
+        <span className="text-white/32" style={{ fontFamily: "'Playfair Display', serif", fontStyle: "italic" }}>
+          Zeus
+        </span>{" "}
+        <span className="text-white/25">AI</span>
       </footer>
     </div>
   );
