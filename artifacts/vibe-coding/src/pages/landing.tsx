@@ -299,83 +299,90 @@ export default function Landing() {
         </div>
       </main>
 
-      {/* HOW IT WORKS */}
+      {/* TESTIMONIALS */}
       <section className="w-full max-w-5xl mx-auto px-5 md:px-8 py-20">
         <div className="text-center mb-14">
           <p className="text-xs uppercase tracking-widest text-white/30 mb-3" style={{ fontFamily: "'Manrope', sans-serif" }}>
-            Три шага до результата
+            Реальные люди, реальные результаты
           </p>
           <h2
             className="text-[34px] sm:text-[44px] font-bold tracking-tight text-white"
             style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700 }}
           >
-            Как это{" "}
+            Нам уже{" "}
             <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontStyle: "italic", fontWeight: 400, fontSize: "1.05em" }}>
-              работает?
+              доверяют
             </span>
           </h2>
           <p className="mt-4 text-base text-white/40 max-w-lg mx-auto" style={{ fontFamily: "'Manrope', sans-serif" }}>
-            Никаких курсов, никакого кода — только ты и идея. Остальное — дело Зевса.
+            Обычные люди без технических знаний — уже запустили свои сайты с Zeus.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Step 1 */}
-          <div className="relative rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-colors p-7 flex flex-col gap-4">
-            <div className="w-11 h-11 rounded-xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-2xl">
-              💬
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-widest text-sky-400/70 font-semibold" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                Шаг 1
-              </span>
-              <h3 className="mt-1 text-lg font-semibold text-white" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                Опиши идею
-              </h3>
-              <p className="mt-2 text-sm text-white/45 leading-relaxed" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                Расскажи словами или голосом, что хочешь — сайт, магазин, визитку. Как другу, без технических слов.
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+          {[
+            {
+              initials: "АК",
+              name: "Алина Краснова",
+              role: "Мастер маникюра",
+              color: "bg-pink-500",
+              quote: "Я три года откладывала сайт, думала — это для программистов. Зевс сделал всё за 7 минут. Теперь клиенты записываются онлайн, а я просто крашу ногти 💅",
+            },
+            {
+              initials: "МД",
+              name: "Максим Дорохов",
+              role: "Владелец кофейни",
+              color: "bg-amber-600",
+              quote: "Попросил Зевса сделать сайт с меню и картой. Он спросил только название. Через 10 минут я уже отправлял ссылку в Instagram. Мои бариста не верили своим глазам ☕",
+            },
+            {
+              initials: "НВ",
+              name: "Наталья Воронова",
+              role: "Репетитор по математике",
+              color: "bg-violet-500",
+              quote: "Ученики спрашивали, где моя страничка. Я говорила — нет. Теперь есть! И выглядит солиднее, чем у коллег, которые платили дизайнерам. Зевс — бог, буквально 📐",
+            },
+            {
+              initials: "ДЛ",
+              name: "Денис Лапин",
+              role: "Фотограф",
+              color: "bg-sky-500",
+              quote: "Портфолио было в папке на компьютере. Теперь — на красивом сайте с галереей. Сказал Зевсу «хочу минимализм и чёрный фон» — и всё. Клиенты наконец могут меня найти 📸",
+            },
+            {
+              initials: "ЕС",
+              name: "Екатерина Смирнова",
+              role: "Самозанятый кондитер",
+              color: "bg-rose-500",
+              quote: "Раньше принимала заказы в WhatsApp и теряла их. Теперь есть сайт с каталогом и формой заказа. Zeus даже цены сам оформил красиво. Торты стали продаваться лучше 🎂",
+            },
+            {
+              initials: "ИМ",
+              name: "Ирина Малькова",
+              role: "Организатор праздников",
+              color: "bg-emerald-500",
+              quote: "Конкурентки смеялись, что у меня нет сайта. Я открыла Zeus, описала чем занимаюсь, и через 8 минут отправила им ссылку. Смеялась уже я 🎉",
+            },
+          ].map((t) => (
+            <div
+              key={t.name}
+              className="rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.14] transition-colors p-6 flex flex-col gap-4"
+            >
+              <div className="flex text-yellow-400 text-sm gap-0.5">{"★★★★★"}</div>
+              <p className="text-sm text-white/60 leading-relaxed flex-1" style={{ fontFamily: "'Manrope', sans-serif" }}>
+                «{t.quote}»
               </p>
+              <div className="flex items-center gap-3 pt-2 border-t border-white/[0.06]">
+                <div className={`w-9 h-9 rounded-full ${t.color} flex items-center justify-center text-white text-xs font-bold shrink-0`} style={{ fontFamily: "'Manrope', sans-serif" }}>
+                  {t.initials}
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-white/85" style={{ fontFamily: "'Manrope', sans-serif" }}>{t.name}</div>
+                  <div className="text-xs text-white/35" style={{ fontFamily: "'Manrope', sans-serif" }}>{t.role}</div>
+                </div>
+              </div>
             </div>
-            <div className="absolute top-6 right-6 text-white/8 text-5xl font-black select-none" style={{ fontFamily: "'Manrope', sans-serif" }}>01</div>
-          </div>
-
-          {/* Step 2 */}
-          <div className="relative rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-colors p-7 flex flex-col gap-4">
-            <div className="w-11 h-11 rounded-xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center text-2xl">
-              ⚡
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-widest text-violet-400/70 font-semibold" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                Шаг 2
-              </span>
-              <h3 className="mt-1 text-lg font-semibold text-white" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                Zeus призывает молнию
-              </h3>
-              <p className="mt-2 text-sm text-white/45 leading-relaxed" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                ИИ пишет код, собирает дизайн и готовит превью за минуты. Пока ты пьёшь кофе — гром уже гремит.
-              </p>
-            </div>
-            <div className="absolute top-6 right-6 text-white/8 text-5xl font-black select-none" style={{ fontFamily: "'Manrope', sans-serif" }}>02</div>
-          </div>
-
-          {/* Step 3 */}
-          <div className="relative rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-colors p-7 flex flex-col gap-4">
-            <div className="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-2xl">
-              🚀
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-widest text-emerald-400/70 font-semibold" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                Шаг 3
-              </span>
-              <h3 className="mt-1 text-lg font-semibold text-white" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                Запускай и делись
-              </h3>
-              <p className="mt-2 text-sm text-white/45 leading-relaxed" style={{ fontFamily: "'Manrope', sans-serif" }}>
-                Публикуй одной кнопкой и отправляй ссылку друзьям и клиентам. Никаких программистов, никакой боли.
-              </p>
-            </div>
-            <div className="absolute top-6 right-6 text-white/8 text-5xl font-black select-none" style={{ fontFamily: "'Manrope', sans-serif" }}>03</div>
-          </div>
+          ))}
         </div>
       </section>
 
