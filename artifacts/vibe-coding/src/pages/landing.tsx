@@ -170,7 +170,7 @@ export default function Landing() {
             <span className="px-1.5 py-0.5 rounded-full bg-violet-600 text-white text-[10px] font-bold tracking-wider uppercase">
               NEW
             </span>
-            <span>Zeus AI превратит вашу идею в готовый проект!</span>
+            <span>· Быстро · просто · без знаний программирования ·</span>
             <span className="text-white/30">→</span>
           </div>
 
@@ -189,11 +189,7 @@ export default function Landing() {
             className="text-base sm:text-lg leading-relaxed max-w-xl"
             style={{ color: "rgba(255,255,255,0.40)", fontWeight: 400 }}
           >
-            Опиши идею простыми словами — Zeus призовёт код, превью
-            <br className="hidden sm:block" />
-            и публикацию за минуты. Без программистов, без боли,
-            <br className="hidden sm:block" />
-            без танцев с бубном.
+            Опишите идею своими словами — Zeus напишет код и покажет готовый результат за минуты.
           </p>
 
           {/* TABS */}
