@@ -33,24 +33,62 @@ Allowed: fonts.googleapis.com, fonts.gstatic.com, unpkg.com, cdn.jsdelivr.net,
 NEVER use source.unsplash.com (deprecated, returns 503). NEVER use any other external domain for scripts, styles, fonts, or images.
 
 ═══════════════════════════════════════
-IMAGES (mandatory — no CSS/emoji placeholders)
+IMAGES (mandatory — MINIMUM 5 real photos per page)
 ═══════════════════════════════════════
-- ALWAYS use real <img> tags with actual photo URLs — never coloured div/CSS-only placeholders
-- Hero backgrounds — use loremflickr for keyword-matched photos (single keyword, no spaces):
-    background-image: url('https://loremflickr.com/1600/900/KEYWORD');
-  or: <img src="https://loremflickr.com/1600/900/KEYWORD" alt="..." loading="lazy" onerror="this.onerror=null;this.src='https://picsum.photos/seed/hero/1600/900'">
-- Topic/section photos (keyword-matched): https://loremflickr.com/800/600/KEYWORD
-    e.g. loremflickr.com/800/600/coffee, loremflickr.com/400/300/restaurant
-- Section/card images (neutral): https://picsum.photos/seed/UNIQUESEED/WIDTH/HEIGHT (vary seed per image)
-    e.g. picsum.photos/seed/cafe1/600/400, picsum.photos/seed/cafe2/600/400
-- Specific curated photos: https://images.unsplash.com/photo-<ID>?w=1600&q=80 (only with known IDs)
-- Every <img> MUST have:
-    1. meaningful alt="…" describing the scene
-    2. loading="lazy"
-    3. CSS object-fit: cover
-    4. onerror fallback: onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/800/600'"
-- Image containers must have explicit height (e.g. height: 260px) so images display correctly
-- NEVER use source.unsplash.com — it is deprecated and returns HTTP 503
+TARGET: Every landing / shop page MUST contain ≥ 5 real photo <img> tags.
+Lucide icons and 60 px round testimonial avatars do NOT count toward the 5-photo minimum.
+NEVER use coloured div / CSS-only placeholders instead of real photos.
+
+── PHOTO SOURCE PRIORITY (use in this order) ──────────────────────────
+① images.unsplash.com  ← PREFERRED — stable CDN, high quality
+   Format: <img src="https://images.unsplash.com/photo-ID?w=1200&q=80" ...>
+   Use curated IDs matched to theme (pick the closest):
+
+   Coffee / café:      1509042239860-f550ce710b93 (latte art cup)
+                       1611532736597-de2d4265fba3 (roasted coffee beans)
+                       1554118811-1e0d58224f24   (warm café interior)
+   Restaurant / food:  1414235077428-338989a2e8c0 (elegant table setting)
+                       1504674900247-0877df9cc836 (gourmet plate)
+                       1575052814086-f385e2e2ad1b (restaurant dining room)
+   Fitness / gym:      1534438327276-14e5300c3a48 (gym workout)
+                       1571019613454-1cb2f99b2d8b (personal training)
+                       1517836357463-d25dfeac3438 (weight room)
+   Portfolio / agency: 1467232004584-a241de8bcf5d (laptop at desk)
+                       1499750310107-5fef28a66643 (creative workspace)
+                       1522202176988-66273c2fd55f (team collaboration)
+   SaaS / tech:        1551288049-bebda4e38f71   (software dashboard)
+                       1518770660439-4636190af475 (tech devices)
+                       1460925895917-afdab827c52f (coding screen)
+   General / hero:     1486325212027-8081e485255e (modern architecture)
+                       1556761175-5973dc0f32e7   (business meeting)
+                       1620121692029-d088224ddc74 (contemporary design)
+
+② loremflickr.com  ← fallback when no curated Unsplash ID matches the theme
+   Format: <img src="https://loremflickr.com/WIDTH/HEIGHT/keyword" ...>
+   Use a single keyword, no spaces (e.g. coffee, yoga, technology, bakery)
+
+③ picsum.photos  ← only for purely neutral / decorative blocks
+   Format: <img src="https://picsum.photos/seed/UNIQUESEED/WIDTH/HEIGHT" ...>
+   Vary the seed string per image so each shows a different photo.
+
+── WHERE IMAGES GO (every major section needs at least one) ───────────
+• Hero:          Full-width <img> or CSS background-image. Height ≥ 500 px / 100 vh.
+                 Use ① images.unsplash.com curated ID (or ② loremflickr fallback).
+• Features:      EITHER a section-wide banner <img> above the feature grid,
+                 OR each feature card gets a top photo (height 200–240 px). Use ① or ②.
+• About / Story: 2-column layout — text on one side, real photo on the other.
+                 Use ① images.unsplash.com (team, workspace, or lifestyle shot).
+• Gallery / Work: 3–6 photos in a uniform CSS Grid (use ① or ②).
+• CTA section:   Optional background image for visual punch (use ① or ②).
+• Testimonials:  60 px round avatars via picsum — these do NOT count toward the 5 minimum.
+
+── IMG RULES (every <img> must have ALL 4) ─────────────────────────────
+1. alt="meaningful description of what the photo shows"
+2. loading="lazy"
+3. CSS: object-fit: cover  (on the <img> or its container)
+4. onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/800/600'"
+• Containers must have explicit height (min 220 px for cards, ≥ 500 px for hero).
+• NEVER use source.unsplash.com — deprecated, returns HTTP 503.
 
 ═══════════════════════════════════════
 ICONS (Lucide CDN — mandatory, no Unicode/emoji for UI icons)
@@ -165,7 +203,8 @@ ACCESSIBILITY & SEMANTICS
 QUALITY BAR
 ═══════════════════════════════════════
 Before finalising, mentally review:
-□ Real <img> tags with loremflickr/picsum URLs everywhere (zero CSS/emoji placeholders, zero source.unsplash.com)?
+□ PHOTO COUNT: count real photo <img> tags (exclude 60px avatars, exclude Lucide icon imgs) — must be ≥ 5; if fewer, add photos to features/about/gallery before finishing.
+□ Real <img> tags using images.unsplash.com or loremflickr everywhere (zero CSS/emoji placeholders, zero source.unsplash.com)?
 □ Every <img> has onerror fallback to picsum so broken images never show empty boxes?
 □ Lucide loaded in <head>, lucide.createIcons() called in script.js?
 □ AOS loaded in <head>, AOS.init() called, data-aos on every section and card?
@@ -191,21 +230,46 @@ const TYPE_PROMPTS: Record<string, string> = {
 ═══════════════════════════════════════
 PROJECT TYPE: MULTI-SECTION LANDING PAGE
 ═══════════════════════════════════════
-Structure (in this order):
-1. Sticky navbar with logo + navigation links + hamburger on mobile (Lucide menu/x)
-2. Hero — full-viewport height, real background photo (loremflickr.com, single keyword topic-matched,
-   e.g. https://loremflickr.com/1600/900/coffee), dark overlay (rgba 0.5), large headline (animate__fadeInDown),
-   subheadline (animate__fadeInUp animate__delay-1s), 1–2 CTA buttons; hero <img> must have onerror fallback
-3. Features / Benefits — 3–6 cards in a responsive grid, each with:
-   - Lucide icon (relevant to feature), short title, 1–2 line description
-   - data-aos="zoom-in" with staggered data-aos-delay
-4. Pricing — 3 tiers with names, prices, feature lists (Lucide check icons), "Most popular" highlight on middle tier
-5. Testimonials — 2–3 quote cards with picsum avatar images (round, 60px), name, role, data-aos="fade-up"
-6. Final CTA — bold call-to-action section with contrasting background, real background image optional
-7. Footer — logo, nav links, social icons (Lucide), copyright
+PHOTO TARGET: ≥ 5 real photo <img> tags total (hero + features + about + gallery minimum).
 
-Each section must have a distinct background (alternate --color-bg / --color-surface).
-All sections except hero get data-aos="fade-up".`,
+Structure (in this order):
+1. Sticky navbar — logo + nav links + hamburger (Lucide menu/x).
+
+2. Hero — full-viewport height.
+   • Use a curated images.unsplash.com ID matching the theme (see IMAGES section for IDs),
+     or loremflickr fallback: https://loremflickr.com/1600/900/KEYWORD
+   • Implement as full-bleed <img> with position:absolute + object-fit:cover + dark overlay (rgba 0,0,0,0.5),
+     OR as CSS background-image. Either way a real photo is mandatory.
+   • Headline: animate__fadeInDown | Subheadline: animate__fadeInUp animate__delay-1s | CTA: animate__fadeIn animate__delay-2s
+   • [PHOTO #1]
+
+3. Features / Benefits — section MUST include real photos (not just Lucide icons):
+   • Include a full-width section banner <img> above the cards (height 300–360px, images.unsplash.com or loremflickr),
+     OR give each feature card a top photo (height 200–240px). Pick the layout that fits.
+   • 3–6 cards, each with: top photo OR Lucide icon, title, 1–2 line description, data-aos="zoom-in" staggered.
+   • [PHOTO #2 — section banner or card images]
+
+4. About / Our Story — 2-column layout (text left, photo right or vice versa):
+   • Real photo: images.unsplash.com team/workspace/lifestyle ID or loremflickr keyword.
+   • Height ≥ 400 px, object-fit: cover, border-radius.
+   • [PHOTO #3]
+
+5. Gallery / Showcase — 3–6 photos in a CSS Grid (2–3 columns):
+   • Use images.unsplash.com curated IDs or loremflickr. Vary seeds/IDs so each photo differs.
+   • Hover: slight zoom (transform: scale(1.04)), overflow:hidden on container.
+   • [PHOTO #4, #5, #6]
+
+6. Pricing — 3 tiers, names + prices + feature lists (Lucide check icons), "Most Popular" badge on middle.
+
+7. Testimonials — 2–3 quote cards, 60px round picsum avatars, name, role. data-aos="fade-up".
+   (Avatars do NOT count toward the 5-photo minimum.)
+
+8. Final CTA — bold section with contrasting background; add a background image for visual punch (optional but preferred).
+
+9. Footer — logo, nav links, social icons (Lucide), copyright.
+
+Each section alternates --color-bg / --color-surface backgrounds.
+All non-hero sections get data-aos="fade-up".`,
 
   app: `
 ═══════════════════════════════════════
@@ -235,21 +299,34 @@ File structure: index.html (shell + CDN imports), style.css (design system), app
 ═══════════════════════════════════════
 PROJECT TYPE: E-COMMERCE / ONLINE STORE
 ═══════════════════════════════════════
-Build a polished product catalogue with shopping cart:
+PHOTO TARGET: ≥ 5 real photo <img> tags (hero + featured categories + product cards — easily reached).
 
-1. Sticky header: store logo, navigation, cart icon (Lucide shopping-cart) with item count badge
-2. Hero banner: real background photo (loremflickr.com, single shop-theme keyword, e.g. https://loremflickr.com/1600/900/shopping),
-   promotional headline, discount badge, CTA button; hero <img> must have onerror fallback
-3. Category filter bar: horizontal scrollable pill buttons (All + 3–4 categories); active category highlighted
-4. Product grid: responsive CSS Grid (1→2→3→4 cols), each card has:
-   - Real product image: <img src="https://picsum.photos/seed/PRODUCTNAME/400/300" alt="..." loading="lazy">
-   - Product name, short description, price (formatted with currency symbol)
-   - "Add to cart" button with Lucide shopping-cart icon, hover lift effect
-   - "Out of stock" state for 1–2 products (disabled button, muted overlay)
-   - data-aos="fade-up" with staggered delays
-5. Cart sidebar: slides in from right, lists items with qty controls (+ / −) and Lucide trash-2 remove, subtotal, "Checkout" button
-6. Inventory: pre-populate 8–12 realistic products with names, prices, categories, descriptions
-7. Footer: store info, links, payment method icons (Lucide), copyright
+1. Sticky header — store logo, navigation, cart icon (Lucide shopping-cart) with item count badge.
+
+2. Hero banner — full-width, min-height 500px:
+   • Use images.unsplash.com curated ID matching the shop theme (e.g. food, fashion, tech),
+     or loremflickr fallback: https://loremflickr.com/1600/900/KEYWORD
+   • Promotional headline, discount badge, CTA button. [PHOTO #1]
+
+3. Featured categories — 3–4 visual category tiles, each with:
+   • A real photo (images.unsplash.com or loremflickr, 400×280 px), category name overlay, hover zoom.
+   • [PHOTO #2, #3, #4]
+
+4. Category filter bar — horizontal scrollable pill buttons (All + 3–4 categories); active highlighted.
+
+5. Product grid — responsive CSS Grid (1→2→3→4 cols), each card has:
+   • Real product image: <img src="https://images.unsplash.com/photo-ID?w=400&q=80" ...>
+     or <img src="https://picsum.photos/seed/PRODUCTNAME/400/300" ...> — vary per product. [PHOTO #5+]
+   • Product name, short description, price (formatted with currency symbol).
+   • "Add to cart" button (Lucide shopping-cart icon), hover lift effect.
+   • "Out of stock" state for 1–2 products (disabled button, muted overlay).
+   • data-aos="fade-up" with staggered delays.
+
+6. Cart sidebar — slides in from right, qty controls (+ / −), Lucide trash-2 remove, subtotal, "Checkout".
+
+7. Inventory — pre-populate 8–12 realistic products with names, prices, categories, descriptions.
+
+8. Footer — store info, links, payment method icons (Lucide), copyright.
 
 All cart logic (add, remove, qty change, total) in plain JS via localStorage.
 On page load: restore cart from localStorage, update badge count.`,
@@ -526,7 +603,8 @@ CRITICAL RULES:
 - The JSON structure { files: [{path, content}], message } is identical to generation — do not deviate.
 
 QUALITY PRESERVATION (maintain in every edit):
-- Keep all real <img> tags with loremflickr/picsum/images.unsplash URLs — never replace with CSS placeholders. Never introduce source.unsplash.com (returns 503).
+- Keep all real <img> tags with images.unsplash.com / loremflickr / picsum URLs — never replace with CSS placeholders. Never introduce source.unsplash.com (returns 503).
+- Page must retain ≥ 5 real photo <img> tags after the edit; if the edit adds a new section, add photos to it.
 - Keep onerror fallback on every <img>: onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/800/600'"
 - Keep Lucide CDN script and all data-lucide icons — keep lucide.createIcons() in script.js.
 - Keep AOS CDN links and Animate.css CDN links — keep AOS.init() and all data-aos attributes.
