@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2,
-  Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2,
+  Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Highlight, themes } from "prism-react-renderer";
@@ -75,6 +75,262 @@ async function readSSEStream(
   } finally {
     reader.releaseLock();
   }
+}
+
+function extractApiError(err: unknown): string {
+  if (!err) return "Неизвестная ошибка";
+  if (err instanceof Error) {
+    const match = err.message.match(/:\s*(.+)$/s);
+    return match ? match[1].trim() : err.message;
+  }
+  return String(err);
+}
+
+function RightPanel({
+  projectId,
+  previewUrl,
+  streamState,
+}: {
+  projectId: number;
+  previewUrl?: string | null;
+  streamState: StreamState;
+}) {
+  const [tab, setTab] = useState<"preview" | "code">("preview");
+  const [iframeKey, setIframeKey] = useState(0);
+  const prevStreamingRef = useRef(false);
+
+  const refreshSandbox = useRefreshSandbox();
+  const queryClient = useQueryClient();
+
+  const { data: files } = useListFiles(projectId, {
+    query: { enabled: !!projectId, queryKey: getListFilesQueryKey(projectId) },
+  });
+  const [activeFile, setActiveFile] = useState<string | null>(null);
+  useEffect(() => {
+    if (files && files.length > 0 && (!activeFile || !files.find((f) => f.path === activeFile))) {
+      setActiveFile(files[0].path);
+    }
+  }, [files, activeFile]);
+  const currentFile = files?.find((f) => f.path === activeFile);
+  const hasFiles = (files?.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (prevStreamingRef.current && !streamState.isStreaming && previewUrl) {
+      setTab("preview");
+    }
+    prevStreamingRef.current = streamState.isStreaming;
+  }, [streamState.isStreaming, previewUrl]);
+
+  const getLanguage = (path: string) => {
+    if (path.endsWith(".tsx") || path.endsWith(".ts")) return "tsx";
+    if (path.endsWith(".jsx") || path.endsWith(".js")) return "jsx";
+    if (path.endsWith(".css")) return "css";
+    if (path.endsWith(".json")) return "json";
+    if (path.endsWith(".html")) return "markup";
+    return "tsx";
+  };
+
+  const handleDeployRefresh = () => {
+    toast.loading("Разворачиваю в песочнице…", { id: "sandbox-refresh" });
+    refreshSandbox.mutate(
+      { id: projectId },
+      {
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+          if (data.previewUrl) {
+            toast.success("Готово!", { id: "sandbox-refresh" });
+          } else {
+            toast.info("Нет файлов для деплоя.", { id: "sandbox-refresh" });
+          }
+        },
+        onError: (err) => {
+          toast.error(extractApiError(err), { id: "sandbox-refresh", duration: 6000 });
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="flex flex-1 flex-col border-l border-border bg-background relative z-0 min-w-0">
+      <div className="flex h-10 shrink-0 items-center justify-between px-2 border-b border-border bg-sidebar gap-2">
+        <div className="flex items-center gap-0.5 bg-background/60 rounded-md p-0.5 border border-border">
+          <button
+            onClick={() => setTab("preview")}
+            className={`flex items-center gap-1.5 px-3 h-6 rounded text-xs font-medium transition-colors ${
+              tab === "preview"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Play className="h-3 w-3" />
+            Превью
+          </button>
+          <button
+            onClick={() => setTab("code")}
+            className={`flex items-center gap-1.5 px-3 h-6 rounded text-xs font-medium transition-colors ${
+              tab === "code"
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Code2 className="h-3 w-3" />
+            Код
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {tab === "preview" && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                onClick={() => setIframeKey((k) => k + 1)}
+                disabled={!previewUrl || streamState.isStreaming}
+                title="Обновить превью"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </Button>
+              {previewUrl && (
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Открыть в новой вкладке"
+                  className="inline-flex items-center justify-center h-7 w-7 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                onClick={handleDeployRefresh}
+                disabled={refreshSandbox.isPending || !hasFiles}
+                title={hasFiles ? "Переразвернуть в песочнице" : "Сначала сгенерируй код"}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshSandbox.isPending ? "animate-spin" : ""}`} />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {tab === "preview" && (
+        <div className="flex-1 bg-white relative overflow-hidden">
+          {streamState.isStreaming ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 bg-background">
+              <span className="text-5xl animate-bounce">⚡</span>
+              <div className="text-sm font-mono font-semibold text-foreground text-center">
+                {streamState.status || "Готовлю превью..."}
+              </div>
+              {streamState.files.length > 0 && (
+                <div className="flex flex-col gap-1.5 mt-1 w-full max-w-[220px]">
+                  {streamState.files.map((f) => (
+                    <div key={f} className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                      <span className="truncate">{f}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : previewUrl ? (
+            <iframe
+              key={`${previewUrl}-${iframeKey}`}
+              src={previewUrl}
+              className="w-full h-full border-0"
+              title="Превью"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-background">
+              <div className="h-16 w-16 rounded-full bg-secondary flex items-center justify-center mb-4">
+                <Play className="h-6 w-6 text-muted-foreground ml-1" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">Превью пока нет</h3>
+              <p className="text-xs text-muted-foreground mb-3">
+                Опиши своё приложение в чате — Zeus сделает всё сам.
+              </p>
+              {hasFiles && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7"
+                  onClick={handleDeployRefresh}
+                  disabled={refreshSandbox.isPending}
+                >
+                  <RefreshCw className={`h-3 w-3 mr-1.5 ${refreshSandbox.isPending ? "animate-spin" : ""}`} />
+                  Развернуть в песочнице
+                </Button>
+              )}
+            </div>
+          )}
+          {refreshSandbox.isPending && (
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="text-sm font-mono font-semibold text-foreground">Разворачиваю песочницу…</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "code" && (
+        <div className="flex flex-1 flex-col min-h-0">
+          <div className="flex h-9 items-center overflow-x-auto border-b border-border bg-sidebar shrink-0 no-scrollbar">
+            {(!files || files.length === 0) && (
+              <div className="px-4 text-xs text-muted-foreground font-mono">Файлов пока нет</div>
+            )}
+            {files?.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setActiveFile(f.path)}
+                className={`flex items-center gap-2 h-full px-4 text-xs font-mono border-r border-sidebar-border transition-colors whitespace-nowrap ${
+                  activeFile === f.path
+                    ? "bg-background text-primary border-t-2 border-t-primary"
+                    : "text-muted-foreground hover:bg-background/50 hover:text-foreground border-t-2 border-t-transparent"
+                }`}
+              >
+                <FileCode2 className="h-3.5 w-3.5 shrink-0" />
+                {f.path.split("/").pop()}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-auto bg-[#0d0d0f] relative text-sm">
+            {currentFile ? (
+              <Highlight
+                theme={themes.vsDark}
+                code={currentFile.content || ""}
+                language={getLanguage(currentFile.path) as any}
+              >
+                {({ className, style, tokens, getLineProps, getTokenProps }) => (
+                  <pre
+                    className={className}
+                    style={{ ...style, padding: "1rem", margin: 0, minHeight: "100%", backgroundColor: "transparent" }}
+                  >
+                    {tokens.map((line, i) => (
+                      <div key={i} {...getLineProps({ line })}>
+                        <span className="inline-block w-8 mr-4 text-right opacity-30 select-none text-xs">{i + 1}</span>
+                        {line.map((token, key) => (
+                          <span key={key} {...getTokenProps({ token })} />
+                        ))}
+                      </div>
+                    ))}
+                  </pre>
+                )}
+              </Highlight>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                <Code2 className="h-12 w-12 text-muted-foreground/20" />
+                <p className="text-xs text-muted-foreground">Код появится после генерации</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Home() {
@@ -197,8 +453,7 @@ export default function Home() {
               streamState={streamState}
               onGenerate={handleGenerate}
             />
-            <CodePanel projectId={activeProjectId} />
-            <PreviewPanel
+            <RightPanel
               projectId={activeProjectId}
               previewUrl={project?.previewUrl}
               streamState={streamState}
@@ -292,15 +547,6 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
       </div>
     </header>
   );
-}
-
-function extractApiError(err: unknown): string {
-  if (!err) return "Неизвестная ошибка";
-  if (err instanceof Error) {
-    const match = err.message.match(/:\s*(.+)$/s);
-    return match ? match[1].trim() : err.message;
-  }
-  return String(err);
 }
 
 function ChatPanel({
@@ -481,202 +727,3 @@ function ChatPanel({
   );
 }
 
-function CodePanel({ projectId }: { projectId: number }) {
-  const { data: files } = useListFiles(projectId, {
-    query: { enabled: !!projectId, queryKey: getListFilesQueryKey(projectId) },
-  });
-  const [activeFile, setActiveFile] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (files && files.length > 0 && (!activeFile || !files.find((f) => f.path === activeFile))) {
-      setActiveFile(files[0].path);
-    }
-  }, [files, activeFile]);
-
-  const currentFile = files?.find((f) => f.path === activeFile);
-
-  const getLanguage = (path: string) => {
-    if (path.endsWith(".tsx") || path.endsWith(".ts")) return "tsx";
-    if (path.endsWith(".jsx") || path.endsWith(".js")) return "jsx";
-    if (path.endsWith(".css")) return "css";
-    if (path.endsWith(".json")) return "json";
-    if (path.endsWith(".html")) return "markup";
-    return "tsx";
-  };
-
-  return (
-    <div className="flex flex-1 flex-col bg-background relative z-0">
-      <div className="flex h-10 items-center overflow-x-auto border-b border-border bg-sidebar shrink-0 no-scrollbar">
-        {(!files || files.length === 0) && (
-          <div className="px-4 text-xs text-muted-foreground font-mono">Файлов пока нет</div>
-        )}
-        {files?.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setActiveFile(f.path)}
-            className={`flex items-center gap-2 h-full px-4 text-xs font-mono border-r border-sidebar-border transition-colors ${
-              activeFile === f.path
-                ? "bg-background text-primary border-t-2 border-t-primary"
-                : "text-muted-foreground hover:bg-background/50 hover:text-foreground border-t-2 border-t-transparent"
-            }`}
-          >
-            <FileCode2 className="h-3.5 w-3.5" />
-            {f.path.split("/").pop()}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 overflow-auto bg-[#0d0d0f] relative text-sm">
-        {currentFile ? (
-          <Highlight
-            theme={themes.vsDark}
-            code={currentFile.content || ""}
-            language={getLanguage(currentFile.path) as any}
-          >
-            {({ className, style, tokens, getLineProps, getTokenProps }) => (
-              <pre
-                className={className}
-                style={{ ...style, padding: "1rem", margin: 0, minHeight: "100%", backgroundColor: "transparent" }}
-              >
-                {tokens.map((line, i) => (
-                  <div key={i} {...getLineProps({ line })}>
-                    <span className="inline-block w-8 mr-4 text-right opacity-30 select-none text-xs">{i + 1}</span>
-                    {line.map((token, key) => (
-                      <span key={key} {...getTokenProps({ token })} />
-                    ))}
-                  </div>
-                ))}
-              </pre>
-            )}
-          </Highlight>
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Code2 className="h-12 w-12 text-muted-foreground/20" />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function PreviewPanel({
-  projectId,
-  previewUrl,
-  streamState,
-}: {
-  projectId: number;
-  previewUrl?: string | null;
-  streamState: StreamState;
-}) {
-  const refreshSandbox = useRefreshSandbox();
-  const queryClient = useQueryClient();
-  const { data: files } = useListFiles(projectId, {
-    query: { enabled: !!projectId, queryKey: getListFilesQueryKey(projectId) },
-  });
-
-  const hasFiles = (files?.length ?? 0) > 0;
-
-  const handleRefresh = () => {
-    toast.loading("Разворачиваю в песочнице…", { id: "sandbox-refresh" });
-    refreshSandbox.mutate(
-      { id: projectId },
-      {
-        onSuccess: (data) => {
-          queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
-          if (data.previewUrl) {
-            toast.success("Готово!", { id: "sandbox-refresh" });
-          } else {
-            toast.info("Нет файлов для деплоя.", { id: "sandbox-refresh" });
-          }
-        },
-        onError: (err) => {
-          toast.error(extractApiError(err), { id: "sandbox-refresh", duration: 6000 });
-        },
-      }
-    );
-  };
-
-  return (
-    <div className="flex w-[400px] shrink-0 flex-col border-l border-border bg-background relative z-10 xl:w-[500px]">
-      <div className="flex h-10 items-center justify-between px-3 border-b border-border bg-sidebar">
-        <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">
-          <Play className="h-3.5 w-3.5" />
-          Превью
-        </div>
-        <div className="flex items-center gap-2">
-          {previewUrl && (
-            <a
-              href={previewUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 text-xs text-primary hover:underline truncate max-w-[160px]"
-              title={previewUrl}
-            >
-              <ExternalLink className="h-3 w-3 shrink-0" />
-              <span className="truncate">{previewUrl.replace("https://", "")}</span>
-            </a>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-muted-foreground hover:text-primary"
-            onClick={handleRefresh}
-            disabled={refreshSandbox.isPending || !hasFiles}
-            title={hasFiles ? "Переразвернуть в песочнице" : "Сначала сгенерируй код"}
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshSandbox.isPending ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex-1 bg-white relative">
-        {previewUrl ? (
-          <iframe
-            key={previewUrl}
-            src={previewUrl}
-            className="w-full h-full border-0"
-            title="Превью"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-          />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-background">
-            <div className="h-16 w-16 rounded-full bg-secondary flex items-center justify-center mb-4">
-              <Play className="h-6 w-6 text-muted-foreground ml-1" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground mb-1">Превью пока нет</h3>
-            <p className="text-xs text-muted-foreground">Опиши своё приложение в чате — Zeus сделает всё сам.</p>
-          </div>
-        )}
-
-        {/* Streaming overlay */}
-        {streamState.isStreaming && (
-          <div className="absolute inset-0 bg-background/90 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4 p-6">
-            <div className="relative flex items-center justify-center">
-              <span className="text-4xl animate-bounce">⚡</span>
-            </div>
-            <div className="text-sm font-mono font-semibold text-foreground text-center">
-              {streamState.status}
-            </div>
-            {streamState.files.length > 0 && (
-              <div className="w-full max-w-[200px] flex flex-col gap-1.5 mt-2">
-                {streamState.files.map((f) => (
-                  <div key={f} className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-                    <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
-                    <span className="truncate">{f}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {refreshSandbox.isPending && (
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <div className="text-sm font-mono font-semibold text-foreground">Разворачиваю песочницу…</div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
