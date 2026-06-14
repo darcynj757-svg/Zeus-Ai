@@ -11,10 +11,14 @@ import {
   ListMessagesParams,
   ListFilesParams,
 } from "@workspace/api-zod";
-import { generateWithOpenAI } from "../lib/openai";
+import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput } from "../lib/openai";
 import { deployToSandbox } from "../lib/sandbox";
 
 const router = Router();
+
+function sendSSE(res: import("express").Response, event: string, data: unknown) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
 
 // GET /projects
 router.get("/projects", async (_req, res): Promise<void> => {
@@ -134,98 +138,171 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  // Fetch conversation history
   const history = await db
     .select()
     .from(messagesTable)
     .where(eq(messagesTable.projectId, params.data.id))
     .orderBy(asc(messagesTable.createdAt));
 
-  // Fetch current files for context
   const currentFiles = await db
     .select()
     .from(filesTable)
     .where(eq(filesTable.projectId, params.data.id));
 
-  // Build context message with current files
   const userMessageContent =
     currentFiles.length > 0
       ? `${body.data.message}\n\nCurrent project files:\n${currentFiles.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n")}`
       : body.data.message;
 
-  // Save user message
   await db.insert(messagesTable).values({
     projectId: params.data.id,
     role: "user",
     content: body.data.message,
   });
 
-  let generated;
-  try {
-    generated = await generateWithOpenAI(
-      history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-      userMessageContent
-    );
-  } catch (err) {
-    req.log.error({ err }, "Code generation failed");
-    const message = err instanceof Error ? err.message : "Code generation failed";
-    res.status(500).json({ error: message });
+  const wantsSSE = (req.headers.accept ?? "").includes("text/event-stream");
+
+  if (!wantsSSE) {
+    // --- Fallback: regular JSON response ---
+    let generated;
+    try {
+      generated = await generateWithOpenAI(
+        history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        userMessageContent
+      );
+    } catch (err) {
+      req.log.error({ err }, "Code generation failed");
+      const message = err instanceof Error ? err.message : "Code generation failed";
+      res.status(500).json({ error: message });
+      return;
+    }
+
+    await db.insert(messagesTable).values({
+      projectId: params.data.id,
+      role: "assistant",
+      content: generated.message,
+    });
+
+    for (const file of generated.files) {
+      const existing = currentFiles.find((f) => f.path === file.path);
+      if (existing) {
+        await db.update(filesTable).set({ content: file.content }).where(eq(filesTable.id, existing.id));
+      } else {
+        await db.insert(filesTable).values({ projectId: params.data.id, path: file.path, content: file.content });
+      }
+    }
+
+    let previewUrl: string | null = project.previewUrl;
+    let sandboxId: string | null = project.sandboxId;
+    try {
+      const result = await deployToSandbox(generated.files, project.sandboxId);
+      previewUrl = result.previewUrl;
+      sandboxId = result.sandboxId;
+      await db.update(projectsTable).set({ previewUrl, sandboxId }).where(eq(projectsTable.id, params.data.id));
+    } catch (err) {
+      req.log.error({ err }, "Sandbox deployment failed");
+    }
+
+    const updatedFiles = await db.select().from(filesTable).where(eq(filesTable.projectId, params.data.id)).orderBy(asc(filesTable.path));
+    res.json({ message: generated.message, files: updatedFiles.map((f) => ({ ...f, updatedAt: f.updatedAt.toISOString() })), previewUrl });
     return;
   }
 
-  // Save assistant message
-  await db.insert(messagesTable).values({
-    projectId: params.data.id,
-    role: "assistant",
-    content: generated.message,
-  });
+  // --- SSE streaming response ---
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
 
-  // Upsert files
-  for (const file of generated.files) {
-    const existing = currentFiles.find((f) => f.path === file.path);
-    if (existing) {
-      await db
-        .update(filesTable)
-        .set({ content: file.content })
-        .where(eq(filesTable.id, existing.id));
-    } else {
-      await db.insert(filesTable).values({
-        projectId: params.data.id,
-        path: file.path,
-        content: file.content,
-      });
-    }
-  }
-
-  // Deploy to E2B sandbox
-  let previewUrl: string | null = project.previewUrl;
-  let sandboxId: string | null = project.sandboxId;
+  const historyMapped = history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
   try {
-    const result = await deployToSandbox(generated.files, project.sandboxId);
-    previewUrl = result.previewUrl;
-    sandboxId = result.sandboxId;
-    await db
-      .update(projectsTable)
-      .set({ previewUrl, sandboxId })
-      .where(eq(projectsTable.id, params.data.id));
+    sendSSE(res, "status", { text: "Принимаю задание, смертный..." });
+
+    // Stream tokens from OpenAI
+    let fullText = "";
+    let tokenBuffer = "";
+    let tokenFlushInterval: ReturnType<typeof setInterval>;
+
+    sendSSE(res, "status", { text: "Призываю молнию OpenAI... ⚡" });
+
+    // Flush tokens in small batches for smooth UX
+    tokenFlushInterval = setInterval(() => {
+      if (tokenBuffer) {
+        sendSSE(res, "token", { text: tokenBuffer });
+        tokenBuffer = "";
+      }
+    }, 40);
+
+    try {
+      for await (const chunk of streamWithOpenAI(historyMapped, userMessageContent)) {
+        fullText += chunk;
+        tokenBuffer += chunk;
+      }
+    } finally {
+      clearInterval(tokenFlushInterval);
+      if (tokenBuffer) {
+        sendSSE(res, "token", { text: tokenBuffer });
+      }
+    }
+
+    // Parse the generated output
+    sendSSE(res, "status", { text: "Разбираю файлы проекта..." });
+
+    let generated;
+    try {
+      generated = parseGeneratedOutput(fullText);
+    } catch {
+      // Retry with non-streaming fallback
+      sendSSE(res, "status", { text: "Перезапускаю молнию (повторная попытка)..." });
+      generated = await generateWithOpenAI(historyMapped, userMessageContent);
+    }
+
+    // Emit file events
+    sendSSE(res, "status", { text: "Собираю файлы проекта..." });
+    for (const file of generated.files) {
+      sendSSE(res, "file", { path: file.path });
+    }
+
+    // Save to DB
+    await db.insert(messagesTable).values({
+      projectId: params.data.id,
+      role: "assistant",
+      content: generated.message,
+    });
+
+    for (const file of generated.files) {
+      const existing = currentFiles.find((f) => f.path === file.path);
+      if (existing) {
+        await db.update(filesTable).set({ content: file.content }).where(eq(filesTable.id, existing.id));
+      } else {
+        await db.insert(filesTable).values({ projectId: params.data.id, path: file.path, content: file.content });
+      }
+    }
+
+    // Deploy to E2B
+    sendSSE(res, "status", { text: "Разворачиваю в песочнице..." });
+    let previewUrl: string | null = project.previewUrl;
+    let sandboxId: string | null = project.sandboxId;
+    try {
+      const result = await deployToSandbox(generated.files, project.sandboxId);
+      previewUrl = result.previewUrl;
+      sandboxId = result.sandboxId;
+      await db.update(projectsTable).set({ previewUrl, sandboxId }).where(eq(projectsTable.id, params.data.id));
+    } catch (err) {
+      req.log.error({ err }, "Sandbox deployment failed");
+    }
+
+    sendSSE(res, "status", { text: "Готово! Молния поразила цель ⚡" });
+    sendSSE(res, "done", { previewUrl, message: generated.message });
   } catch (err) {
-    req.log.error({ err }, "Sandbox deployment failed");
-    // Continue without preview — still return generated files
+    req.log.error({ err }, "Streaming generation failed");
+    const message = err instanceof Error ? err.message : "Ошибка генерации";
+    sendSSE(res, "error", { text: message });
+  } finally {
+    res.end();
   }
-
-  // Return updated files
-  const updatedFiles = await db
-    .select()
-    .from(filesTable)
-    .where(eq(filesTable.projectId, params.data.id))
-    .orderBy(asc(filesTable.path));
-
-  res.json({
-    message: generated.message,
-    files: updatedFiles.map((f) => ({ ...f, updatedAt: f.updatedAt.toISOString() })),
-    previewUrl,
-  });
 });
 
 // POST /projects/:id/sandbox/refresh
@@ -256,7 +333,7 @@ router.post("/projects/:id/sandbox/refresh", async (req, res): Promise<void> => 
   }
 
   try {
-    const result = await deployToSandbox(files, null); // force new sandbox
+    const result = await deployToSandbox(files, null);
     await db
       .update(projectsTable)
       .set({ previewUrl: result.previewUrl, sandboxId: result.sandboxId })

@@ -1,37 +1,91 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
-import { 
-  useListProjects, 
-  useCreateProject, 
-  useGetProject, 
+import {
+  useListProjects,
+  useCreateProject,
+  useGetProject,
   useDeleteProject,
   useListMessages,
   useListFiles,
-  useGenerateCode,
   useRefreshSandbox,
   getListMessagesQueryKey,
   getListFilesQueryKey,
   getGetProjectQueryKey,
-  getListProjectsQueryKey
+  getListProjectsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2, Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft } from "lucide-react";
+import {
+  RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2,
+  Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Highlight, themes } from "prism-react-renderer";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
+
+interface StreamState {
+  isStreaming: boolean;
+  status: string;
+  liveText: string;
+  files: string[];
+  error: string | null;
+}
+
+const initialStreamState: StreamState = {
+  isStreaming: false,
+  status: "",
+  liveText: "",
+  files: [],
+  error: null,
+};
+
+async function readSSEStream(
+  response: Response,
+  onEvent: (type: string, data: Record<string, unknown>) => void
+) {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let currentEventType = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          currentEventType = line.slice(7).trim();
+        } else if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6)) as Record<string, unknown>;
+            onEvent(currentEventType || "message", data);
+          } catch {
+            // ignore malformed
+          }
+          currentEventType = "";
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
 
 export default function Home() {
   const queryClient = useQueryClient();
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const createdRef = useRef(false);
-  
+  const [streamState, setStreamState] = useState<StreamState>(initialStreamState);
+
   const { data: projects, isLoading: projectsLoading } = useListProjects();
   const createProject = useCreateProject();
-  
+
   useEffect(() => {
     if (projectsLoading || !projects) return;
     if (projects.length === 0 && !createdRef.current) {
@@ -45,17 +99,68 @@ export default function Home() {
           },
           onError: () => {
             createdRef.current = false;
-          }
+          },
         }
       );
     } else if (projects.length > 0 && !activeProjectId) {
       setActiveProjectId(projects[0].id);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects, projectsLoading]);
 
-  const { data: project } = useGetProject(activeProjectId as number, { query: { enabled: !!activeProjectId, queryKey: getGetProjectQueryKey(activeProjectId as number) } });
-  
+  const { data: project } = useGetProject(activeProjectId as number, {
+    query: { enabled: !!activeProjectId, queryKey: getGetProjectQueryKey(activeProjectId as number) },
+  });
+
+  const handleGenerate = useCallback(
+    async (projectId: number, message: string) => {
+      setStreamState({ isStreaming: true, status: "Запускаю Зевса...", liveText: "", files: [], error: null });
+
+      try {
+        const response = await fetch(`/api/projects/${projectId}/generate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({ message }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText || `HTTP ${response.status}`);
+        }
+
+        await readSSEStream(response, (type, data) => {
+          if (type === "status") {
+            setStreamState((s) => ({ ...s, status: (data.text as string) ?? s.status }));
+          } else if (type === "token") {
+            setStreamState((s) => ({ ...s, liveText: s.liveText + ((data.text as string) ?? "") }));
+          } else if (type === "file") {
+            setStreamState((s) => ({
+              ...s,
+              files: s.files.includes(data.path as string) ? s.files : [...s.files, data.path as string],
+            }));
+          } else if (type === "done") {
+            setStreamState((s) => ({ ...s, isStreaming: false, status: "Готово ⚡" }));
+            queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
+            queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(projectId) });
+            queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+          } else if (type === "error") {
+            const errMsg = (data.text as string) ?? "Ошибка генерации";
+            setStreamState((s) => ({ ...s, isStreaming: false, error: errMsg }));
+            toast.error(errMsg, { duration: 8000 });
+          }
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Ошибка соединения";
+        setStreamState((s) => ({ ...s, isStreaming: false, error: msg }));
+        toast.error(msg, { duration: 8000 });
+      }
+    },
+    [queryClient]
+  );
+
   if (projectsLoading || (!activeProjectId && projects?.length === 0)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
@@ -66,18 +171,26 @@ export default function Home() {
 
   return (
     <div className="flex h-screen w-full flex-col bg-background text-foreground overflow-hidden">
-      <Header 
-        projects={projects || []} 
-        activeProjectId={activeProjectId} 
+      <Header
+        projects={projects || []}
+        activeProjectId={activeProjectId}
         onSelectProject={setActiveProjectId}
         projectName={project?.name || "Загрузка..."}
       />
       <div className="flex flex-1 overflow-hidden border-t border-border">
         {activeProjectId ? (
           <>
-            <ChatPanel projectId={activeProjectId} />
+            <ChatPanel
+              projectId={activeProjectId}
+              streamState={streamState}
+              onGenerate={handleGenerate}
+            />
             <CodePanel projectId={activeProjectId} />
-            <PreviewPanel projectId={activeProjectId} previewUrl={project?.previewUrl} />
+            <PreviewPanel
+              projectId={activeProjectId}
+              previewUrl={project?.previewUrl}
+              streamState={streamState}
+            />
           </>
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -96,23 +209,29 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
   const deleteProject = useDeleteProject();
 
   const handleNewProject = () => {
-    createProject.mutate({ data: { name: "Новое приложение " + Math.floor(Math.random() * 100) } }, {
-      onSuccess: (p) => {
-        queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-        onSelectProject(p.id);
+    createProject.mutate(
+      { data: { name: "Новое приложение " + Math.floor(Math.random() * 100) } },
+      {
+        onSuccess: (p) => {
+          queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+          onSelectProject(p.id);
+        },
       }
-    });
+    );
   };
 
   const handleDelete = () => {
     if (!activeProjectId) return;
-    deleteProject.mutate({ id: activeProjectId }, {
-      onSuccess: () => {
-        toast.success("Проект удалён");
-        queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
-        onSelectProject(null);
+    deleteProject.mutate(
+      { id: activeProjectId },
+      {
+        onSuccess: () => {
+          toast.success("Проект удалён");
+          queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+          onSelectProject(null);
+        },
       }
-    });
+    );
   };
 
   return (
@@ -140,14 +259,22 @@ function Header({ projects, activeProjectId, onSelectProject, projectName }: any
           </SelectTrigger>
           <SelectContent>
             {projects?.map((p: any) => (
-              <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>
+              <SelectItem key={p.id} value={p.id.toString()}>
+                {p.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <Button variant="secondary" size="sm" className="h-8" onClick={handleNewProject}>
           <Plus className="h-4 w-4 mr-1" /> Новый
         </Button>
-        <Button variant="destructive" size="icon" className="h-8 w-8" onClick={handleDelete} disabled={!activeProjectId || deleteProject.isPending}>
+        <Button
+          variant="destructive"
+          size="icon"
+          className="h-8 w-8"
+          onClick={handleDelete}
+          disabled={!activeProjectId || deleteProject.isPending}
+        >
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
@@ -164,24 +291,27 @@ function extractApiError(err: unknown): string {
   return String(err);
 }
 
-function ChatPanel({ projectId }: { projectId: number }) {
-  const queryClient = useQueryClient();
-  const { data: messages, isLoading } = useListMessages(projectId, { query: { enabled: !!projectId, queryKey: getListMessagesQueryKey(projectId) } });
-  const generateCode = useGenerateCode();
+function ChatPanel({
+  projectId,
+  streamState,
+  onGenerate,
+}: {
+  projectId: number;
+  streamState: StreamState;
+  onGenerate: (projectId: number, message: string) => void;
+}) {
+  const { data: messages, isLoading } = useListMessages(projectId, {
+    query: { enabled: !!projectId, queryKey: getListMessagesQueryKey(projectId) },
+  });
   const [prompt, setPrompt] = useState("");
-  const [chatError, setChatError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialPromptUsed = useRef(false);
-
-  useEffect(() => {
-    setChatError(null);
-  }, [projectId]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, generateCode.isPending, chatError]);
+  }, [messages, streamState.isStreaming, streamState.liveText, streamState.error]);
 
   useEffect(() => {
     if (!initialPromptUsed.current) {
@@ -197,25 +327,11 @@ function ChatPanel({ projectId }: { projectId: number }) {
   const speech = useSpeechRecognition((text) => setPrompt(text));
 
   const handleGenerate = () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || streamState.isStreaming) return;
     if (speech.isListening) speech.stop();
     const userMsg = prompt;
     setPrompt("");
-    setChatError(null);
-    generateCode.mutate({ id: projectId, data: { message: userMsg } }, {
-      onSuccess: () => {
-        setChatError(null);
-        queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
-        queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(projectId) });
-        queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
-      },
-      onError: (err) => {
-        const message = extractApiError(err);
-        toast.error(message, { duration: 8000 });
-        setChatError(message);
-        queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
-      }
-    });
+    onGenerate(projectId, userMsg);
   };
 
   return (
@@ -223,48 +339,83 @@ function ChatPanel({ projectId }: { projectId: number }) {
       <div className="flex h-10 items-center px-4 border-b border-sidebar-border bg-background/50">
         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">Чат</span>
       </div>
-      
+
       <ScrollArea className="flex-1 p-4" ref={scrollRef}>
         <div className="flex flex-col gap-4 pb-4">
-          {messages?.length === 0 && !generateCode.isPending && !chatError && (
+          {messages?.length === 0 && !streamState.isStreaming && !streamState.error && (
             <div className="text-sm text-muted-foreground text-center mt-10 font-sans leading-relaxed">
               <div className="text-2xl mb-3">⚡</div>
               <div className="font-medium text-foreground/80 mb-1">Расскажи, что хочешь создать</div>
               <div className="text-xs text-muted-foreground/70">Можно писать или говорить голосом</div>
             </div>
           )}
+
           {messages?.map((msg: any) => (
-            <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+            <div key={msg.id} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
               <div className="flex items-center gap-2 mb-1 px-1">
-                <span className={`text-[10px] uppercase font-mono font-semibold ${msg.role === 'user' ? 'text-primary' : 'text-muted-foreground'}`}>
-                  {msg.role === 'user' ? 'Ты' : 'Zeus'}
+                <span
+                  className={`text-[10px] uppercase font-mono font-semibold ${
+                    msg.role === "user" ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {msg.role === "user" ? "Ты" : "Zeus"}
                 </span>
               </div>
-              <div className={`text-sm rounded-md px-3 py-2 max-w-[90%] font-sans whitespace-pre-wrap ${
-                msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground border border-border'
-              }`}>
+              <div
+                className={`text-sm rounded-md px-3 py-2 max-w-[90%] font-sans whitespace-pre-wrap ${
+                  msg.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-secondary-foreground border border-border"
+                }`}
+              >
                 {msg.content}
               </div>
             </div>
           ))}
-          {generateCode.isPending && (
-            <div className="flex flex-col items-start">
+
+          {/* Live streaming block */}
+          {streamState.isStreaming && (
+            <div className="flex flex-col items-start gap-2">
               <div className="flex items-center gap-2 mb-1 px-1">
                 <span className="text-[10px] uppercase font-mono font-semibold text-primary">Zeus</span>
               </div>
-              <div className="text-sm rounded-md px-3 py-2 max-w-[90%] bg-secondary text-secondary-foreground border border-primary/50 flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="font-mono text-xs animate-pulse">Генерирую...</span>
+
+              {/* Status bar */}
+              <div className="w-full rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5 flex items-center gap-2">
+                <span className="text-base animate-pulse shrink-0">⚡</span>
+                <span className="text-xs font-mono text-primary font-medium truncate">{streamState.status}</span>
               </div>
+
+              {/* Files list */}
+              {streamState.files.length > 0 && (
+                <div className="w-full rounded-lg border border-border bg-secondary/40 px-3 py-2 flex flex-col gap-1">
+                  {streamState.files.map((f) => (
+                    <div key={f} className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                      <span className="truncate">{f}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Live token text (last ~200 chars) */}
+              {streamState.liveText.length > 0 && (
+                <div className="w-full rounded-lg border border-border bg-secondary/20 px-3 py-2">
+                  <p className="text-[11px] font-mono text-muted-foreground/60 leading-relaxed line-clamp-4 break-all">
+                    {streamState.liveText.slice(-300)}
+                  </p>
+                </div>
+              )}
             </div>
           )}
-          {chatError && !generateCode.isPending && (
+
+          {streamState.error && !streamState.isStreaming && (
             <div className="flex flex-col items-start">
               <div className="flex items-center gap-1 mb-1 px-1">
                 <span className="text-[10px] uppercase font-mono font-semibold text-destructive">ошибка</span>
               </div>
               <div className="text-sm rounded-md px-3 py-2 max-w-[90%] bg-destructive/10 text-destructive border border-destructive/40 font-sans whitespace-pre-wrap">
-                ⚠ {chatError}
+                ⚠ {streamState.error}
               </div>
             </div>
           )}
@@ -273,18 +424,18 @@ function ChatPanel({ projectId }: { projectId: number }) {
 
       <div className="p-3 border-t border-sidebar-border bg-background">
         <div className="relative">
-          <Textarea 
+          <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 handleGenerate();
               }
             }}
             placeholder="Опиши своё приложение..."
             className="min-h-[80px] resize-none pr-20 font-sans text-sm bg-secondary/50 border-sidebar-border focus-visible:ring-primary"
-            disabled={generateCode.isPending}
+            disabled={streamState.isStreaming}
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-1">
             {speech.isSupported && (
@@ -299,19 +450,19 @@ function ChatPanel({ projectId }: { projectId: number }) {
                     : "text-muted-foreground hover:text-primary hover:bg-primary/10"
                 }`}
                 onClick={() => speech.toggle(prompt)}
-                disabled={generateCode.isPending}
+                disabled={streamState.isStreaming}
               >
                 {speech.isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
             )}
-            <Button 
-              size="icon" 
-              variant="ghost" 
+            <Button
+              size="icon"
+              variant="ghost"
               className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
               onClick={handleGenerate}
-              disabled={generateCode.isPending || !prompt.trim()}
+              disabled={streamState.isStreaming || !prompt.trim()}
             >
-              {generateCode.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {streamState.isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -330,24 +481,26 @@ function ChatPanel({ projectId }: { projectId: number }) {
 }
 
 function CodePanel({ projectId }: { projectId: number }) {
-  const { data: files } = useListFiles(projectId, { query: { enabled: !!projectId, queryKey: getListFilesQueryKey(projectId) } });
+  const { data: files } = useListFiles(projectId, {
+    query: { enabled: !!projectId, queryKey: getListFilesQueryKey(projectId) },
+  });
   const [activeFile, setActiveFile] = useState<string | null>(null);
 
   useEffect(() => {
-    if (files && files.length > 0 && (!activeFile || !files.find(f => f.path === activeFile))) {
+    if (files && files.length > 0 && (!activeFile || !files.find((f) => f.path === activeFile))) {
       setActiveFile(files[0].path);
     }
   }, [files, activeFile]);
 
-  const currentFile = files?.find(f => f.path === activeFile);
+  const currentFile = files?.find((f) => f.path === activeFile);
 
   const getLanguage = (path: string) => {
-    if (path.endsWith('.tsx') || path.endsWith('.ts')) return 'tsx';
-    if (path.endsWith('.jsx') || path.endsWith('.js')) return 'jsx';
-    if (path.endsWith('.css')) return 'css';
-    if (path.endsWith('.json')) return 'json';
-    if (path.endsWith('.html')) return 'markup';
-    return 'tsx';
+    if (path.endsWith(".tsx") || path.endsWith(".ts")) return "tsx";
+    if (path.endsWith(".jsx") || path.endsWith(".js")) return "jsx";
+    if (path.endsWith(".css")) return "css";
+    if (path.endsWith(".json")) return "json";
+    if (path.endsWith(".html")) return "markup";
+    return "tsx";
   };
 
   return (
@@ -356,27 +509,34 @@ function CodePanel({ projectId }: { projectId: number }) {
         {(!files || files.length === 0) && (
           <div className="px-4 text-xs text-muted-foreground font-mono">Файлов пока нет</div>
         )}
-        {files?.map(f => (
+        {files?.map((f) => (
           <button
             key={f.id}
             onClick={() => setActiveFile(f.path)}
             className={`flex items-center gap-2 h-full px-4 text-xs font-mono border-r border-sidebar-border transition-colors ${
-              activeFile === f.path 
-                ? 'bg-background text-primary border-t-2 border-t-primary' 
-                : 'text-muted-foreground hover:bg-background/50 hover:text-foreground border-t-2 border-t-transparent'
+              activeFile === f.path
+                ? "bg-background text-primary border-t-2 border-t-primary"
+                : "text-muted-foreground hover:bg-background/50 hover:text-foreground border-t-2 border-t-transparent"
             }`}
           >
             <FileCode2 className="h-3.5 w-3.5" />
-            {f.path.split('/').pop()}
+            {f.path.split("/").pop()}
           </button>
         ))}
       </div>
-      
+
       <div className="flex-1 overflow-auto bg-[#0d0d0f] relative text-sm">
         {currentFile ? (
-          <Highlight theme={themes.vsDark} code={currentFile.content || ''} language={getLanguage(currentFile.path) as any}>
+          <Highlight
+            theme={themes.vsDark}
+            code={currentFile.content || ""}
+            language={getLanguage(currentFile.path) as any}
+          >
             {({ className, style, tokens, getLineProps, getTokenProps }) => (
-              <pre className={className} style={{ ...style, padding: '1rem', margin: 0, minHeight: '100%', backgroundColor: 'transparent' }}>
+              <pre
+                className={className}
+                style={{ ...style, padding: "1rem", margin: 0, minHeight: "100%", backgroundColor: "transparent" }}
+              >
                 {tokens.map((line, i) => (
                   <div key={i} {...getLineProps({ line })}>
                     <span className="inline-block w-8 mr-4 text-right opacity-30 select-none text-xs">{i + 1}</span>
@@ -398,29 +558,41 @@ function CodePanel({ projectId }: { projectId: number }) {
   );
 }
 
-function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl?: string | null }) {
+function PreviewPanel({
+  projectId,
+  previewUrl,
+  streamState,
+}: {
+  projectId: number;
+  previewUrl?: string | null;
+  streamState: StreamState;
+}) {
   const refreshSandbox = useRefreshSandbox();
   const queryClient = useQueryClient();
-  const generateCode = useGenerateCode();
-  const { data: files } = useListFiles(projectId, { query: { enabled: !!projectId, queryKey: getListFilesQueryKey(projectId) } });
+  const { data: files } = useListFiles(projectId, {
+    query: { enabled: !!projectId, queryKey: getListFilesQueryKey(projectId) },
+  });
 
   const hasFiles = (files?.length ?? 0) > 0;
 
   const handleRefresh = () => {
     toast.loading("Разворачиваю в песочнице…", { id: "sandbox-refresh" });
-    refreshSandbox.mutate({ id: projectId }, {
-      onSuccess: (data) => {
-        queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
-        if (data.previewUrl) {
-          toast.success("Готово!", { id: "sandbox-refresh" });
-        } else {
-          toast.info("Нет файлов для деплоя.", { id: "sandbox-refresh" });
-        }
-      },
-      onError: (err) => {
-        toast.error(extractApiError(err), { id: "sandbox-refresh", duration: 6000 });
+    refreshSandbox.mutate(
+      { id: projectId },
+      {
+        onSuccess: (data) => {
+          queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+          if (data.previewUrl) {
+            toast.success("Готово!", { id: "sandbox-refresh" });
+          } else {
+            toast.info("Нет файлов для деплоя.", { id: "sandbox-refresh" });
+          }
+        },
+        onError: (err) => {
+          toast.error(extractApiError(err), { id: "sandbox-refresh", duration: 6000 });
+        },
       }
-    });
+    );
   };
 
   return (
@@ -432,35 +604,35 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
         </div>
         <div className="flex items-center gap-2">
           {previewUrl && (
-            <a 
-              href={previewUrl} 
-              target="_blank" 
+            <a
+              href={previewUrl}
+              target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1 text-xs text-primary hover:underline truncate max-w-[160px]"
               title={previewUrl}
             >
               <ExternalLink className="h-3 w-3 shrink-0" />
-              <span className="truncate">{previewUrl.replace('https://', '')}</span>
+              <span className="truncate">{previewUrl.replace("https://", "")}</span>
             </a>
           )}
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-6 w-6 text-muted-foreground hover:text-primary"
             onClick={handleRefresh}
             disabled={refreshSandbox.isPending || !hasFiles}
             title={hasFiles ? "Переразвернуть в песочнице" : "Сначала сгенерируй код"}
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshSandbox.isPending ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshSandbox.isPending ? "animate-spin" : ""}`} />
           </Button>
         </div>
       </div>
-      
+
       <div className="flex-1 bg-white relative">
         {previewUrl ? (
-          <iframe 
+          <iframe
             key={previewUrl}
-            src={previewUrl} 
+            src={previewUrl}
             className="w-full h-full border-0"
             title="Превью"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
@@ -474,13 +646,33 @@ function PreviewPanel({ projectId, previewUrl }: { projectId: number, previewUrl
             <p className="text-xs text-muted-foreground">Опиши своё приложение в чате — Zeus сделает всё сам.</p>
           </div>
         )}
-        
-        {(generateCode.isPending || refreshSandbox.isPending) && (
+
+        {/* Streaming overlay */}
+        {streamState.isStreaming && (
+          <div className="absolute inset-0 bg-background/90 backdrop-blur-sm flex flex-col items-center justify-center z-50 gap-4 p-6">
+            <div className="relative flex items-center justify-center">
+              <span className="text-4xl animate-bounce">⚡</span>
+            </div>
+            <div className="text-sm font-mono font-semibold text-foreground text-center">
+              {streamState.status}
+            </div>
+            {streamState.files.length > 0 && (
+              <div className="w-full max-w-[200px] flex flex-col gap-1.5 mt-2">
+                {streamState.files.map((f) => (
+                  <div key={f} className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                    <span className="truncate">{f}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {refreshSandbox.isPending && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center z-50">
             <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-            <div className="text-sm font-mono font-semibold text-foreground">
-              {generateCode.isPending ? "Генерирую и разворачиваю…" : "Разворачиваю песочницу…"}
-            </div>
+            <div className="text-sm font-mono font-semibold text-foreground">Разворачиваю песочницу…</div>
           </div>
         )}
       </div>

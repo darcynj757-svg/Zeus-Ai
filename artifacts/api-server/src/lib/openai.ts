@@ -53,7 +53,6 @@ export async function generateWithOpenAI(
       response = completion.choices[0]?.message?.content ?? null;
       if (!response) throw new Error("Empty response from OpenAI");
 
-      // Strip markdown fences if present
       const cleaned = response
         .replace(/^```json\s*/i, "")
         .replace(/^```\s*/i, "")
@@ -76,4 +75,46 @@ export async function generateWithOpenAI(
   }
 
   throw new Error(`Failed after 3 attempts: ${lastError?.message}`);
+}
+
+export async function* streamWithOpenAI(
+  messages: Array<{ role: "user" | "assistant"; content: string }>,
+  userMessage: string
+): AsyncGenerator<string> {
+  const openai = getOpenAIClient();
+
+  const chatMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...messages.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user", content: userMessage },
+  ];
+
+  const stream = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: chatMessages,
+    temperature: 0.2,
+    max_tokens: 16000,
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (delta) yield delta;
+  }
+}
+
+export function parseGeneratedOutput(raw: string): GeneratedOutput {
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  const parsed = JSON.parse(cleaned) as GeneratedOutput;
+
+  if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
+    throw new Error("Invalid JSON structure from OpenAI");
+  }
+
+  return parsed;
 }
