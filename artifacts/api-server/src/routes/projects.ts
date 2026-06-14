@@ -13,7 +13,7 @@ import {
   ListFilesParams,
 } from "@workspace/api-zod";
 import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePlan, generateZeusMd } from "../lib/openai";
-import { deployToSandbox } from "../lib/sandbox";
+import { deployToSandbox, DeployError } from "../lib/sandbox";
 
 const router = Router();
 
@@ -220,13 +220,18 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
 
     let previewUrl: string | null = project.previewUrl;
     let sandboxId: string | null = project.sandboxId;
+    let deployErrMsg: string | null = null;
     try {
       const result = await deployToSandbox(generated.files, project.sandboxId);
       previewUrl = result.previewUrl;
       sandboxId = result.sandboxId;
       await db.update(projectsTable).set({ previewUrl, sandboxId }).where(eq(projectsTable.id, params.data.id));
     } catch (err) {
-      req.log.error({ err }, "Sandbox deployment failed");
+      req.log.error({ err }, "Sandbox deployment failed after retries");
+      deployErrMsg =
+        err instanceof DeployError
+          ? `Деплой не удался (${err.code}): ${err.message}`
+          : "Деплой в песочницу временно недоступен — код сгенерирован и сохранён.";
     }
 
     // Generate/update zeus.md brand context (non-blocking)
@@ -235,7 +240,12 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
       .catch((err) => req.log.warn({ err }, "zeus.md generation failed (non-critical)"));
 
     const updatedFiles = await db.select().from(filesTable).where(eq(filesTable.projectId, params.data.id)).orderBy(asc(filesTable.path));
-    res.json({ message: generated.message, files: updatedFiles.map((f) => ({ ...f, updatedAt: f.updatedAt.toISOString() })), previewUrl });
+    res.json({
+      message: generated.message,
+      files: updatedFiles.map((f) => ({ ...f, updatedAt: f.updatedAt.toISOString() })),
+      previewUrl,
+      deployError: deployErrMsg,
+    });
     return;
   }
 
@@ -312,20 +322,35 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
       }
     }
 
-    // Deploy to E2B
+    // Deploy to E2B with retries
     sendSSE(res, "status", { text: "Деплою в песочницу..." });
     let previewUrl: string | null = project.previewUrl;
     let sandboxId: string | null = project.sandboxId;
+    let deployError: string | null = null;
     try {
-      const result = await deployToSandbox(generated.files, project.sandboxId);
+      const result = await deployToSandbox(
+        generated.files,
+        project.sandboxId,
+        (attempt, err) => {
+          req.log.warn({ err, attempt }, "Deploy attempt failed, retrying");
+          sendSSE(res, "status", {
+            text: `⏳ Деплой, попытка ${attempt + 1}/3... (предыдущая не удалась)`,
+          });
+        }
+      );
       previewUrl = result.previewUrl;
       sandboxId = result.sandboxId;
       await db.update(projectsTable).set({ previewUrl, sandboxId }).where(eq(projectsTable.id, params.data.id));
       sendSSE(res, "status", { text: "Превью готово ✓" });
     } catch (err) {
-      req.log.error({ err }, "Sandbox deployment failed");
-      const sandboxErrMsg = err instanceof Error ? err.message : "Ошибка деплоя в песочницу";
-      sendSSE(res, "status", { text: `⚠ Ошибка деплоя: ${sandboxErrMsg}` });
+      req.log.error({ err }, "Sandbox deployment failed after all retries");
+      deployError =
+        err instanceof DeployError
+          ? `Деплой не удался (${err.code}): ${err.message}`
+          : "Деплой в песочницу временно недоступен — код сгенерирован и сохранён.";
+      sendSSE(res, "status", {
+        text: `⚠ ${deployError} Попробуй пересгенерировать позже.`,
+      });
     }
 
     // Generate/update zeus.md brand context (non-blocking — fires after SSE done)
@@ -333,7 +358,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
       .then((ctx) => db.update(projectsTable).set({ zeusContext: ctx }).where(eq(projectsTable.id, params.data.id)))
       .catch((err) => req.log.warn({ err }, "zeus.md generation failed (non-critical)"));
 
-    sendSSE(res, "done", { previewUrl, message: generated.message });
+    sendSSE(res, "done", { previewUrl, deployError, message: generated.message });
   } catch (err) {
     req.log.error({ err }, "Streaming generation failed");
     const message = err instanceof Error ? err.message : "Ошибка генерации";

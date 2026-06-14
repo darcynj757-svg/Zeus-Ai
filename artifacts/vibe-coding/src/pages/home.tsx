@@ -834,7 +834,13 @@ export default function Home() {
           } else if (type === "done") {
             const url = (data.previewUrl as string | null) ?? null;
             if (url) setLivePreviewUrl(url);
-            setStreamState((s) => ({ ...s, isStreaming: false, status: "Готово ⚡" }));
+            const deployErr = data.deployError as string | null | undefined;
+            if (deployErr) {
+              toast.warning(`⚠ ${deployErr}`, { duration: 10000 });
+              setStreamState((s) => ({ ...s, isStreaming: false, status: "Готово (деплой не удался)" }));
+            } else {
+              setStreamState((s) => ({ ...s, isStreaming: false, status: "Готово ⚡" }));
+            }
             queryClient.invalidateQueries({ queryKey: getListMessagesQueryKey(projectId) });
             queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(projectId) });
             queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });

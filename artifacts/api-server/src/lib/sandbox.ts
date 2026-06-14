@@ -6,89 +6,179 @@ const SERVE_PORT = 3000;
 const READY_POLL_INTERVAL_MS = 500;
 const READY_TIMEOUT_MS = 30_000;
 
+const DEPLOY_OVERALL_TIMEOUT_MS = 60_000;
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1_500;
+
 export interface SandboxResult {
   sandboxId: string;
   previewUrl: string;
 }
 
+export class DeployError extends Error {
+  constructor(
+    message: string,
+    public readonly cause: unknown,
+    public readonly attempt: number,
+    public readonly code: "SANDBOX_CREATE" | "FILE_WRITE" | "SERVER_START" | "PORT_TIMEOUT" | "TIMEOUT"
+  ) {
+    super(message);
+    this.name = "DeployError";
+  }
+}
+
+/**
+ * Retry helper with exponential backoff + jitter.
+ * Throws the last error if all attempts fail.
+ */
+async function withRetry<T>(
+  fn: (attempt: number) => Promise<T>,
+  maxAttempts: number,
+  baseDelayMs: number,
+  onRetry?: (attempt: number, err: unknown) => void
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        onRetry?.(attempt, err);
+        const jitter = Math.random() * 500;
+        const delay = baseDelayMs * Math.pow(2, attempt - 1) + jitter;
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 /**
  * Write files to an E2B sandbox and start a static HTTP server.
- * Generated apps are always plain HTML/CSS/JS — no build step needed.
- * Returns the sandbox ID and the preview URL.
+ * Retries up to 3× with exponential backoff; races against a 60s global timeout.
+ * Throws DeployError with a structured code so callers can show useful messages.
  */
 export async function deployToSandbox(
   files: Array<{ path: string; content: string }>,
-  existingSandboxId?: string | null
+  existingSandboxId?: string | null,
+  onRetry?: (attempt: number, err: unknown) => void
 ): Promise<SandboxResult> {
   if (!process.env.E2B_API_KEY) {
-    throw new Error(
-      "Добавьте E2B_API_KEY в Secrets (Replit → Tools → Secrets) для деплоя в песочницу"
+    throw new DeployError(
+      "Добавьте E2B_API_KEY в Secrets (Replit → Tools → Secrets) для деплоя в песочницу",
+      null,
+      1,
+      "SANDBOX_CREATE"
     );
   }
 
-  // Connect to existing sandbox or create new one
+  const overallTimeout = new Promise<never>((_, reject) =>
+    setTimeout(
+      () =>
+        reject(
+          new DeployError(
+            `Деплой превысил общий лимит ${DEPLOY_OVERALL_TIMEOUT_MS / 1000}s`,
+            null,
+            RETRY_MAX_ATTEMPTS,
+            "TIMEOUT"
+          )
+        ),
+      DEPLOY_OVERALL_TIMEOUT_MS
+    )
+  );
+
+  return Promise.race([
+    withRetry(
+      (attempt) => _deployAttempt(files, existingSandboxId, attempt),
+      RETRY_MAX_ATTEMPTS,
+      RETRY_BASE_DELAY_MS,
+      onRetry
+    ),
+    overallTimeout,
+  ]);
+}
+
+async function _deployAttempt(
+  files: Array<{ path: string; content: string }>,
+  existingSandboxId?: string | null,
+  attempt: number = 1
+): Promise<SandboxResult> {
   let sandbox: Sandbox;
+
+  // Step 1: connect to existing sandbox or create new one
   try {
     if (existingSandboxId) {
       try {
         sandbox = await Sandbox.connect(existingSandboxId);
         await sandbox.setTimeout(SANDBOX_TIMEOUT_MS);
-        logger.info({ sandboxId: existingSandboxId }, "Reconnected to existing sandbox");
+        logger.info({ sandboxId: existingSandboxId, attempt }, "Reconnected to existing sandbox");
       } catch {
-        logger.info({ existingSandboxId }, "Existing sandbox gone, creating new one");
+        logger.info({ existingSandboxId, attempt }, "Existing sandbox gone, creating new one");
         sandbox = await Sandbox.create({ timeoutMs: SANDBOX_TIMEOUT_MS });
       }
     } else {
       sandbox = await Sandbox.create({ timeoutMs: SANDBOX_TIMEOUT_MS });
     }
   } catch (err) {
-    logger.error({ err }, "Failed to create/connect sandbox");
-    throw err;
+    logger.warn({ err, attempt }, "Failed to create/connect sandbox");
+    throw new DeployError("Не удалось создать песочницу", err, attempt, "SANDBOX_CREATE");
   }
 
   const sandboxId = sandbox.sandboxId;
-  logger.info({ sandboxId }, "Sandbox ready, writing files");
+  logger.info({ sandboxId, attempt }, "Sandbox ready, writing files");
 
-  // Write all files to /home/user/app/
-  for (const file of files) {
-    const fullPath = `/home/user/app/${file.path}`;
-    const dir = fullPath.substring(0, fullPath.lastIndexOf("/"));
-    if (dir !== "/home/user/app") {
-      await sandbox.commands.run(`mkdir -p "${dir}"`, { timeoutMs: 5000 });
+  // Step 2: write files
+  try {
+    for (const file of files) {
+      const fullPath = `/home/user/app/${file.path}`;
+      const dir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+      if (dir !== "/home/user/app") {
+        await sandbox.commands.run(`mkdir -p "${dir}"`, { timeoutMs: 5_000 });
+      }
+      await sandbox.files.write(fullPath, file.content);
     }
-    await sandbox.files.write(fullPath, file.content);
+  } catch (err) {
+    logger.warn({ err, sandboxId, attempt }, "Failed to write files to sandbox");
+    throw new DeployError("Ошибка записи файлов в песочницу", err, attempt, "FILE_WRITE");
   }
 
-  // Always serve as static files — generated apps are plain HTML/CSS/JS.
-  // Python's built-in http.server is pre-installed in E2B and starts instantly.
-  // Fire-and-forget: shell returns immediately thanks to `&`.
-  // timeoutMs:5000 covers the shell startup; .catch() prevents unhandled rejection
-  // from crashing the Node process when the internal CommandHandle eventually times out.
-  logger.info({ sandboxId }, `Starting static server on port ${SERVE_PORT}`);
-  sandbox.commands
-    .run(`cd /home/user/app && python3 -m http.server ${SERVE_PORT} > /tmp/server.log 2>&1 &`, {
-      timeoutMs: 5000,
-    })
-    .catch(() => {
-      // Expected: shell exits immediately (background &), CommandHandle may
-      // still emit a timeout — suppress it so the Node process stays alive.
-    });
+  // Step 3: start static server (fire-and-forget — background process)
+  try {
+    logger.info({ sandboxId, attempt }, `Starting static server on port ${SERVE_PORT}`);
+    sandbox.commands
+      .run(`cd /home/user/app && python3 -m http.server ${SERVE_PORT} > /tmp/server.log 2>&1 &`, {
+        timeoutMs: 5_000,
+      })
+      .catch(() => {
+        // Expected: shell exits immediately (background &), CommandHandle may
+        // still emit a timeout — suppress it so the Node process stays alive.
+      });
+  } catch (err) {
+    throw new DeployError("Не удалось запустить HTTP-сервер в песочнице", err, attempt, "SERVER_START");
+  }
 
-  // Wait until the port is actually listening before returning the URL.
-  // Uses Python (guaranteed to be present) instead of nc/curl to check the port.
-  await waitForPort(sandbox, SERVE_PORT, READY_TIMEOUT_MS, READY_POLL_INTERVAL_MS);
+  // Step 4: wait for port to be ready
+  try {
+    await waitForPort(sandbox, SERVE_PORT, READY_TIMEOUT_MS, READY_POLL_INTERVAL_MS);
+  } catch (err) {
+    throw new DeployError(
+      `Порт ${SERVE_PORT} не поднялся за ${READY_TIMEOUT_MS / 1000}s`,
+      err,
+      attempt,
+      "PORT_TIMEOUT"
+    );
+  }
 
-  // Use the official SDK method to get the host — never build it manually
   const host = sandbox.getHost(SERVE_PORT);
   const previewUrl = `https://${host}`;
 
-  logger.info({ sandboxId, previewUrl }, "Sandbox deployed");
+  logger.info({ sandboxId, previewUrl, attempt }, "Sandbox deployed successfully");
   return { sandboxId, previewUrl };
 }
 
 /**
  * Poll until the given TCP port is listening inside the sandbox, or throw after timeout.
- * Uses Python's socket module — guaranteed available since we use Python for the server.
  */
 async function waitForPort(
   sandbox: Sandbox,
@@ -101,7 +191,7 @@ async function waitForPort(
     try {
       const result = await sandbox.commands.run(
         `python3 -c "import socket; s=socket.socket(); s.settimeout(1); r=s.connect_ex(('localhost',${port})); s.close(); print('OK' if r==0 else 'WAIT')"`,
-        { timeoutMs: 3000 }
+        { timeoutMs: 3_000 }
       );
       if (result.stdout.trim() === "OK") {
         return;
