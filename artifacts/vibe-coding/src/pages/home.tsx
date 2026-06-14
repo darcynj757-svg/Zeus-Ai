@@ -21,8 +21,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2,
   Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2, RotateCcw, Download,
-  ListChecks, Pencil, Sparkles, Wand2,
+  ListChecks, Pencil, Sparkles, Wand2, History,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { Highlight, themes } from "prism-react-renderer";
 import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
@@ -385,6 +386,96 @@ function RightPanel({
   );
 }
 
+function HistoryDropdown({ projectId, onRestored }: { projectId: number; onRestored: (url: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [snapshots, setSnapshots] = useState<{ id: number; label: string; createdAt: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+
+  const fetchSnapshots = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/snapshots`);
+      if (!res.ok) throw new Error("Failed");
+      setSnapshots(await res.json() as { id: number; label: string; createdAt: string }[]);
+    } catch {
+      toast.error("Не удалось загрузить снапшоты");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async (snapshotId: number) => {
+    setRestoringId(snapshotId);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/restore/${snapshotId}`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json() as { restoredFiles: string[]; previewUrl: string | null; deployError: string | null };
+      queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(projectId) });
+      queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+      if (data.previewUrl) onRestored(data.previewUrl);
+      if (data.deployError) {
+        toast.warning(`⚠ Откат выполнен (деплой не удался): ${data.deployError}`, { duration: 8000 });
+      } else {
+        toast.success(`✓ Откат выполнен: ${data.restoredFiles.length} файлов восстановлено`, { duration: 5000 });
+      }
+      setOpen(false);
+    } catch {
+      toast.error("Не удалось выполнить откат");
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (v) fetchSnapshots(); }}>
+      <PopoverTrigger asChild>
+        <button
+          title="История снапшотов"
+          className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors border border-transparent hover:border-border"
+        >
+          <History className="h-3 w-3" />
+          История
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-0" side="bottom" align="end">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+          <span className="text-xs font-semibold text-foreground">Снапшоты</span>
+          {loading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+        </div>
+        <ScrollArea className="max-h-64">
+          {!loading && snapshots.length === 0 && (
+            <div className="px-3 py-4 text-xs text-center text-muted-foreground leading-relaxed">
+              Снапшотов пока нет.<br />
+              Они создаются автоматически перед каждой генерацией и редактированием.
+            </div>
+          )}
+          {snapshots.map((s) => (
+            <div key={s.id} className="flex items-center gap-2 px-3 py-2 border-b border-border/50 last:border-0 hover:bg-accent/50 transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-foreground truncate">{s.label}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {new Date(s.createdAt).toLocaleString("ru-RU")}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-[10px] shrink-0"
+                onClick={() => handleRestore(s.id)}
+                disabled={restoringId !== null}
+              >
+                {restoringId === s.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Откат"}
+              </Button>
+            </div>
+          ))}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function Header({ projects, activeProjectId, onSelectProject, projectName }: any) {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -474,6 +565,7 @@ function ChatPanel({
   editState,
   onGenerate,
   onEdit,
+  onRestored,
   hasFiles,
 }: {
   projectId: number;
@@ -482,6 +574,7 @@ function ChatPanel({
   editState: EditState;
   onGenerate: (projectId: number, message: string, tier: ModelTier) => void;
   onEdit: (projectId: number, instruction: string, tier: ModelTier) => void;
+  onRestored: (previewUrl: string) => void;
   hasFiles: boolean;
 }) {
   const { data: messages } = useListMessages(projectId, {
@@ -558,6 +651,7 @@ function ChatPanel({
       <div className="flex h-10 items-center justify-between px-4 border-b border-sidebar-border bg-background/50">
         <span className="text-xs font-mono font-semibold uppercase tracking-wider text-muted-foreground">Чат</span>
         <div className="flex items-center gap-1.5">
+          <HistoryDropdown projectId={projectId} onRestored={onRestored} />
           {/* Model tier toggle */}
           <div className="flex items-center rounded-md border border-border overflow-hidden">
             <button
@@ -971,6 +1065,17 @@ export default function Home() {
     [queryClient]
   );
 
+  const handleRestored = useCallback(
+    (previewUrl: string) => {
+      setLivePreviewUrl(previewUrl);
+      if (activeProjectId) {
+        queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(activeProjectId) });
+        queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(activeProjectId) });
+      }
+    },
+    [queryClient, activeProjectId]
+  );
+
   const handleEdit = useCallback(
     async (projectId: number, instruction: string, tier: ModelTier = "lite") => {
       setEditState({ isEditing: true, status: "Патчу файлы...", error: null });
@@ -1060,6 +1165,7 @@ export default function Home() {
               editState={editState}
               onGenerate={handleGenerate}
               onEdit={handleEdit}
+              onRestored={handleRestored}
               hasFiles={hasFiles}
             />
             <RightPanel

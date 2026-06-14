@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, desc } from "drizzle-orm";
 import { ZipArchive } from "archiver";
-import { db, projectsTable, messagesTable, filesTable } from "@workspace/db";
+import { db, projectsTable, messagesTable, filesTable, snapshotsTable } from "@workspace/db";
 import {
   CreateProjectBody,
   GetProjectParams,
@@ -24,6 +24,18 @@ function parseTier(value: unknown): ModelTier {
 
 function sendSSE(res: import("express").Response, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+async function autoSnapshot(projectId: number, files: { path: string; content: string }[], label: string): Promise<void> {
+  try {
+    await db.insert(snapshotsTable).values({
+      projectId,
+      filesJson: JSON.stringify(files),
+      label,
+    });
+  } catch {
+    // Non-critical — don't interrupt the main operation
+  }
 }
 
 // GET /projects
@@ -81,6 +93,7 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
   }
   await db.delete(messagesTable).where(eq(messagesTable.projectId, params.data.id));
   await db.delete(filesTable).where(eq(filesTable.projectId, params.data.id));
+  await db.delete(snapshotsTable).where(eq(snapshotsTable.projectId, params.data.id));
   const [deleted] = await db
     .delete(projectsTable)
     .where(eq(projectsTable.id, params.data.id))
@@ -171,6 +184,15 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     .select()
     .from(filesTable)
     .where(eq(filesTable.projectId, params.data.id));
+
+  // Auto-snapshot before overwriting (only when project already has files)
+  if (currentFiles.length > 0) {
+    await autoSnapshot(
+      params.data.id,
+      currentFiles.map((f) => ({ path: f.path, content: f.content })),
+      `До генерации: ${body.data.message.slice(0, 50)}`
+    );
+  }
 
   // Inject zeus.md brand context for repeat iterations
   const zeusContextBlock = project.zeusContext
@@ -412,6 +434,13 @@ router.post("/projects/:id/edit", async (req, res): Promise<void> => {
     return;
   }
 
+  // Auto-snapshot before patching
+  await autoSnapshot(
+    params.data.id,
+    existingFiles.map((f) => ({ path: f.path, content: f.content })),
+    `До редактирования: ${instruction.trim().slice(0, 50)}`
+  );
+
   req.log.info({ model: editTier === "lite" ? "gpt-4o-mini" : "gpt-4o", tier: editTier }, "edit: model selected");
 
   let edited: import("../lib/openai").GeneratedOutput;
@@ -568,6 +597,113 @@ router.post("/projects/:id/sandbox/refresh", async (req, res): Promise<void> => 
     const message = err instanceof Error ? err.message : "Sandbox refresh failed";
     res.status(500).json({ error: message });
   }
+});
+
+// POST /projects/:id/snapshot — create a snapshot manually
+router.post("/projects/:id/snapshot", async (req, res): Promise<void> => {
+  const params = GetProjectParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const { label } = req.body as { label?: string };
+  const files = await db
+    .select()
+    .from(filesTable)
+    .where(eq(filesTable.projectId, params.data.id));
+  if (files.length === 0) {
+    res.status(400).json({ error: "Нет файлов для снапшота" });
+    return;
+  }
+  const [snapshot] = await db
+    .insert(snapshotsTable)
+    .values({
+      projectId: params.data.id,
+      filesJson: JSON.stringify(files.map((f) => ({ path: f.path, content: f.content }))),
+      label: label || new Date().toLocaleString("ru-RU"),
+    })
+    .returning();
+  res.status(201).json({ ...snapshot, createdAt: snapshot.createdAt.toISOString() });
+});
+
+// GET /projects/:id/snapshots — list snapshots (newest first, no filesJson)
+router.get("/projects/:id/snapshots", async (req, res): Promise<void> => {
+  const params = GetProjectParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const snapshots = await db
+    .select({
+      id: snapshotsTable.id,
+      label: snapshotsTable.label,
+      createdAt: snapshotsTable.createdAt,
+    })
+    .from(snapshotsTable)
+    .where(eq(snapshotsTable.projectId, params.data.id))
+    .orderBy(desc(snapshotsTable.createdAt));
+  res.json(snapshots.map((s) => ({ ...s, createdAt: s.createdAt.toISOString() })));
+});
+
+// POST /projects/:id/restore/:snapshotId — restore files + redeploy
+router.post("/projects/:id/restore/:snapshotId", async (req, res): Promise<void> => {
+  const projectId = parseInt(req.params.id, 10);
+  const snapshotId = parseInt(req.params.snapshotId, 10);
+  if (isNaN(projectId) || isNaN(snapshotId)) {
+    res.status(400).json({ error: "Invalid project or snapshot id" });
+    return;
+  }
+
+  const [project] = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.id, projectId));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  const [snapshot] = await db
+    .select()
+    .from(snapshotsTable)
+    .where(eq(snapshotsTable.id, snapshotId));
+  if (!snapshot || snapshot.projectId !== projectId) {
+    res.status(404).json({ error: "Snapshot not found" });
+    return;
+  }
+
+  const restoredFiles = JSON.parse(snapshot.filesJson) as { path: string; content: string }[];
+
+  // Replace all current files with snapshot files
+  await db.delete(filesTable).where(eq(filesTable.projectId, projectId));
+  for (const file of restoredFiles) {
+    await db.insert(filesTable).values({ projectId, path: file.path, content: file.content });
+  }
+
+  // Redeploy to E2B
+  let previewUrl: string | null = null;
+  let sandboxId: string | null = null;
+  let deployErrMsg: string | null = null;
+  try {
+    const result = await deployToSandbox(restoredFiles, null);
+    previewUrl = result.previewUrl;
+    sandboxId = result.sandboxId;
+    await db.update(projectsTable).set({ previewUrl, sandboxId }).where(eq(projectsTable.id, projectId));
+  } catch (err) {
+    req.log.error({ err }, "Restore sandbox deployment failed");
+    deployErrMsg =
+      err instanceof DeployError
+        ? `Деплой не удался (${err.code}): ${err.message}`
+        : "Деплой в песочницу временно недоступен — файлы восстановлены.";
+  }
+
+  req.log.info({ snapshotId, restoredFilesCount: restoredFiles.length, deployErrMsg }, "snapshot restored");
+
+  res.json({
+    restoredFiles: restoredFiles.map((f) => f.path),
+    previewUrl,
+    deployError: deployErrMsg,
+  });
 });
 
 export default router;
