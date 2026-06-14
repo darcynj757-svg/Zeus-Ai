@@ -161,6 +161,18 @@ export default function Home() {
     [queryClient]
   );
 
+  // Auto-submit prompt from landing page once project is ready
+  const autoSubmitRef = useRef(false);
+  useEffect(() => {
+    if (!activeProjectId || autoSubmitRef.current) return;
+    const saved = sessionStorage.getItem("zeus_initial_prompt");
+    if (saved) {
+      sessionStorage.removeItem("zeus_initial_prompt");
+      autoSubmitRef.current = true;
+      handleGenerate(activeProjectId, saved);
+    }
+  }, [activeProjectId, handleGenerate]);
+
   if (projectsLoading || (!activeProjectId && projects?.length === 0)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background text-foreground">
@@ -305,7 +317,6 @@ function ChatPanel({
   });
   const [prompt, setPrompt] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const initialPromptUsed = useRef(false);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -313,16 +324,6 @@ function ChatPanel({
     }
   }, [messages, streamState.isStreaming, streamState.liveText, streamState.error]);
 
-  useEffect(() => {
-    if (!initialPromptUsed.current) {
-      const saved = sessionStorage.getItem("zeus_initial_prompt");
-      if (saved) {
-        sessionStorage.removeItem("zeus_initial_prompt");
-        initialPromptUsed.current = true;
-        setPrompt(saved);
-      }
-    }
-  }, []);
 
   const speech = useSpeechRecognition((text) => setPrompt(text));
 
