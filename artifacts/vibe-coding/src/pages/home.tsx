@@ -21,7 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   RefreshCw, Play, Send, Plus, Code2, Loader2, FileCode2,
   Trash2, ExternalLink, Mic, MicOff, Zap, ArrowLeft, CheckCircle2, RotateCcw, Download,
-  ListChecks, Pencil, Sparkles,
+  ListChecks, Pencil, Sparkles, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Highlight, themes } from "prism-react-renderer";
@@ -32,6 +32,12 @@ interface StreamState {
   status: string;
   liveText: string;
   files: string[];
+  error: string | null;
+}
+
+interface EditState {
+  isEditing: boolean;
+  status: string;
   error: string | null;
 }
 
@@ -463,17 +469,24 @@ function ChatPanel({
   projectId,
   projectType,
   streamState,
+  editState,
   onGenerate,
+  onEdit,
+  hasFiles,
 }: {
   projectId: number;
   projectType?: string | null;
   streamState: StreamState;
+  editState: EditState;
   onGenerate: (projectId: number, message: string) => void;
+  onEdit: (projectId: number, instruction: string) => void;
+  hasFiles: boolean;
 }) {
   const { data: messages } = useListMessages(projectId, {
     query: { enabled: !!projectId, queryKey: getListMessagesQueryKey(projectId) },
   });
   const [prompt, setPrompt] = useState("");
+  const [editPrompt, setEditPrompt] = useState("");
   const [planMode, setPlanMode] = useState(false);
   const [plan, setPlan] = useState<ProjectPlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -709,7 +722,7 @@ function ChatPanel({
             }}
             placeholder={planMode ? "Опиши проект — Zeus покажет план..." : "Опиши своё приложение..."}
             className="min-h-[80px] resize-none pr-20 font-sans text-sm bg-secondary/50 border-sidebar-border focus-visible:ring-primary"
-            disabled={streamState.isStreaming || planLoading || !!plan}
+            disabled={streamState.isStreaming || planLoading || !!plan || editState.isEditing}
           />
           <div className="absolute bottom-2 right-2 flex items-center gap-1">
             {speech.isSupported && (
@@ -724,7 +737,7 @@ function ChatPanel({
                     : "text-muted-foreground hover:text-primary hover:bg-primary/10"
                 }`}
                 onClick={() => speech.toggle(prompt)}
-                disabled={streamState.isStreaming || planLoading || !!plan}
+                disabled={streamState.isStreaming || planLoading || !!plan || editState.isEditing}
               >
                 {speech.isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
               </Button>
@@ -734,7 +747,7 @@ function ChatPanel({
               variant="ghost"
               className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
               onClick={handleGenerate}
-              disabled={streamState.isStreaming || planLoading || !!plan || !prompt.trim()}
+              disabled={streamState.isStreaming || planLoading || !!plan || !prompt.trim() || editState.isEditing}
             >
               {planLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -758,15 +771,79 @@ function ChatPanel({
           </div>
         )}
       </div>
+
+      {/* Edit panel — shown only after project has been generated */}
+      {hasFiles && (
+        <div className="px-3 pb-3 border-t border-sidebar-border bg-background/70">
+          <div className="mt-2.5 mb-1.5 flex items-center gap-1.5">
+            <Wand2 className="h-3 w-3 text-amber-400 shrink-0" />
+            <span className="text-[10px] uppercase font-mono font-semibold tracking-wider text-amber-400/80">
+              Редактировать
+            </span>
+          </div>
+          {editState.error && !editState.isEditing && (
+            <div className="mb-2 text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-2.5 py-1.5 font-sans">
+              ⚠ {editState.error}
+            </div>
+          )}
+          {editState.isEditing && (
+            <div className="mb-2 flex items-center gap-2 text-xs text-amber-400 font-mono bg-amber-400/5 border border-amber-400/20 rounded-md px-2.5 py-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+              <span className="truncate">{editState.status}</span>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={editPrompt}
+              onChange={(e) => setEditPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !editState.isEditing && editPrompt.trim()) {
+                  onEdit(projectId, editPrompt.trim());
+                  setEditPrompt("");
+                }
+              }}
+              placeholder="Что изменить? (напр. «сделай кнопки красными»)"
+              className="flex-1 h-8 rounded-md border border-sidebar-border bg-secondary/50 px-2.5 text-xs font-sans text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-amber-400/60 disabled:opacity-50"
+              disabled={editState.isEditing || streamState.isStreaming}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 px-2.5 text-xs gap-1.5 border-amber-400/40 text-amber-400 hover:bg-amber-400/10 hover:text-amber-300 shrink-0"
+              disabled={editState.isEditing || streamState.isStreaming || !editPrompt.trim()}
+              onClick={() => {
+                if (!editPrompt.trim()) return;
+                onEdit(projectId, editPrompt.trim());
+                setEditPrompt("");
+              }}
+            >
+              {editState.isEditing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Wand2 className="h-3.5 w-3.5" />
+              )}
+              Патч
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const initialEditState: EditState = {
+  isEditing: false,
+  status: "",
+  error: null,
+};
 
 export default function Home() {
   const queryClient = useQueryClient();
   const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
   const createdRef = useRef(false);
   const [streamState, setStreamState] = useState<StreamState>(initialStreamState);
+  const [editState, setEditState] = useState<EditState>(initialEditState);
   const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null);
 
   const { data: projects, isLoading: projectsLoading } = useListProjects();
@@ -800,6 +877,11 @@ export default function Home() {
   const { data: project } = useGetProject(activeProjectId as number, {
     query: { enabled: !!activeProjectId, queryKey: getGetProjectQueryKey(activeProjectId as number) },
   });
+
+  const { data: homeFiles } = useListFiles(activeProjectId as number, {
+    query: { enabled: !!activeProjectId, queryKey: getListFilesQueryKey(activeProjectId as number) },
+  });
+  const hasFiles = (homeFiles?.length ?? 0) > 0;
 
   const handleGenerate = useCallback(
     async (projectId: number, message: string) => {
@@ -859,6 +941,54 @@ export default function Home() {
     [queryClient]
   );
 
+  const handleEdit = useCallback(
+    async (projectId: number, instruction: string) => {
+      setEditState({ isEditing: true, status: "Патчу файлы...", error: null });
+
+      try {
+        const response = await fetch(`/api/projects/${projectId}/edit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ instruction }),
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+          throw new Error(errData.error ?? `HTTP ${response.status}`);
+        }
+
+        const data = await response.json() as {
+          message: string;
+          patchedFiles: string[];
+          filesBefore: string[];
+          previewUrl: string | null;
+          deployError: string | null;
+        };
+
+        if (data.previewUrl) setLivePreviewUrl(data.previewUrl);
+
+        queryClient.invalidateQueries({ queryKey: getListFilesQueryKey(projectId) });
+        queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(projectId) });
+
+        if (data.deployError) {
+          toast.warning(`⚠ ${data.deployError}`, { duration: 10000 });
+          setEditState({ isEditing: false, status: "", error: null });
+        } else {
+          toast.success(
+            `✓ Патч применён: ${data.patchedFiles.join(", ")} (${data.patchedFiles.length} из ${data.filesBefore.length} файлов)`,
+            { duration: 8000 }
+          );
+          setEditState({ isEditing: false, status: "", error: null });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Ошибка редактирования";
+        setEditState({ isEditing: false, status: "", error: msg });
+        toast.error(msg, { duration: 8000 });
+      }
+    },
+    [queryClient]
+  );
+
   // Auto-submit prompt from landing page once project is ready
   const autoSubmitRef = useRef(false);
   useEffect(() => {
@@ -897,7 +1027,10 @@ export default function Home() {
               projectId={activeProjectId}
               projectType={project?.projectType}
               streamState={streamState}
+              editState={editState}
               onGenerate={handleGenerate}
+              onEdit={handleEdit}
+              hasFiles={hasFiles}
             />
             <RightPanel
               projectId={activeProjectId}

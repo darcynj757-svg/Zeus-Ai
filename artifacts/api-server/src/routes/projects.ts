@@ -12,7 +12,7 @@ import {
   ListMessagesParams,
   ListFilesParams,
 } from "@workspace/api-zod";
-import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePlan, generateZeusMd } from "../lib/openai";
+import { generateWithOpenAI, streamWithOpenAI, parseGeneratedOutput, generatePlan, generateZeusMd, editProject } from "../lib/openai";
 import { deployToSandbox, DeployError } from "../lib/sandbox";
 
 const router = Router();
@@ -366,6 +366,109 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
   } finally {
     res.end();
   }
+});
+
+// POST /projects/:id/edit
+router.post("/projects/:id/edit", async (req, res): Promise<void> => {
+  const params = GetProjectParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const { instruction } = req.body as { instruction?: string };
+  if (!instruction || typeof instruction !== "string" || !instruction.trim()) {
+    res.status(400).json({ error: "instruction is required" });
+    return;
+  }
+
+  const [project] = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.id, params.data.id));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+
+  const existingFiles = await db
+    .select()
+    .from(filesTable)
+    .where(eq(filesTable.projectId, params.data.id))
+    .orderBy(asc(filesTable.path));
+
+  if (existingFiles.length === 0) {
+    res.status(400).json({ error: "Проект не содержит файлов — сначала сгенерируй проект" });
+    return;
+  }
+
+  let edited: import("../lib/openai").GeneratedOutput;
+  try {
+    edited = await editProject(
+      existingFiles.map((f) => ({ path: f.path, content: f.content })),
+      instruction.trim(),
+      project.zeusContext ?? null
+    );
+  } catch (err) {
+    req.log.error({ err }, "editProject failed");
+    const message = err instanceof Error ? err.message : "Ошибка редактирования";
+    res.status(500).json({ error: message });
+    return;
+  }
+
+  // Upsert only the changed/new files — leave untouched files in DB as-is
+  const filesBefore = existingFiles.map((f) => f.path);
+  for (const file of edited.files) {
+    const existing = existingFiles.find((f) => f.path === file.path);
+    if (existing) {
+      await db.update(filesTable).set({ content: file.content }).where(eq(filesTable.id, existing.id));
+    } else {
+      await db.insert(filesTable).values({ projectId: params.data.id, path: file.path, content: file.content });
+    }
+  }
+
+  // Load full merged file set for deploy
+  const allFiles = await db
+    .select()
+    .from(filesTable)
+    .where(eq(filesTable.projectId, params.data.id))
+    .orderBy(asc(filesTable.path));
+
+  let previewUrl: string | null = project.previewUrl;
+  let sandboxId: string | null = project.sandboxId;
+  let deployErrMsg: string | null = null;
+  try {
+    const result = await deployToSandbox(
+      allFiles.map((f) => ({ path: f.path, content: f.content })),
+      project.sandboxId,
+      (attempt, err) => {
+        req.log.warn({ err, attempt }, "Edit deploy attempt failed, retrying");
+      }
+    );
+    previewUrl = result.previewUrl;
+    sandboxId = result.sandboxId;
+    await db.update(projectsTable).set({ previewUrl, sandboxId }).where(eq(projectsTable.id, params.data.id));
+  } catch (err) {
+    req.log.error({ err }, "Edit sandbox deployment failed after retries");
+    deployErrMsg =
+      err instanceof DeployError
+        ? `Деплой не удался (${err.code}): ${err.message}`
+        : "Деплой в песочницу временно недоступен — изменения сохранены.";
+  }
+
+  // Update zeus.md brand context (non-blocking)
+  generateZeusMd(allFiles.map((f) => ({ path: f.path, content: f.content })), project.projectType ?? "landing")
+    .then((ctx) => db.update(projectsTable).set({ zeusContext: ctx }).where(eq(projectsTable.id, params.data.id)))
+    .catch((err) => req.log.warn({ err }, "zeus.md update failed (non-critical)"));
+
+  res.json({
+    message: edited.message,
+    patchedFiles: edited.files.map((f) => f.path),
+    filesBefore,
+    allFiles: allFiles.map((f) => ({ ...f, updatedAt: f.updatedAt.toISOString() })),
+    previewUrl,
+    deployError: deployErrMsg,
+  });
 });
 
 // GET /projects/:id/download

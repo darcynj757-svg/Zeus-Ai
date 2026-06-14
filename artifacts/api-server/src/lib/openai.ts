@@ -402,6 +402,81 @@ export async function generateZeusMd(
   ].join("\n");
 }
 
+const EDIT_SYSTEM_PROMPT = `You are a surgical code editor. You receive existing project files and an edit instruction.
+
+OUTPUT FORMAT (non-negotiable): respond ONLY with a single valid JSON object, zero markdown outside JSON:
+{
+  "files": [
+    {"path": "style.css", "content": "...full file content..."}
+  ],
+  "message": "one-sentence description of what was changed"
+}
+
+CRITICAL RULES:
+- Return ONLY files that were actually modified or newly created. Do NOT return unchanged files.
+- Return the COMPLETE content of each modified file (not a diff, not a partial — the full file).
+- If only style.css needs changing, return only style.css.
+- Preserve all existing functionality in unchanged parts of modified files.
+- The JSON structure { files: [{path, content}], message } is identical to generation — do not deviate.`;
+
+export async function editProject(
+  existingFiles: Array<{ path: string; content: string }>,
+  instruction: string,
+  zeusContext?: string | null
+): Promise<GeneratedOutput> {
+  const openai = getOpenAIClient();
+
+  const zeusBlock = zeusContext
+    ? `\n\n[Brand context from zeus.md — maintain these decisions:]\n${zeusContext}`
+    : "";
+
+  const filesBlock = existingFiles
+    .map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``)
+    .join("\n\n");
+
+  const userContent = `Edit instruction: ${instruction}${zeusBlock}\n\nExisting project files:\n${filesBlock}`;
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: EDIT_SYSTEM_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.2,
+        max_tokens: 16000,
+      });
+
+      const response = completion.choices[0]?.message?.content ?? null;
+      if (!response) throw new Error("Empty response from OpenAI");
+
+      const cleaned = response
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
+
+      const parsed = JSON.parse(cleaned) as GeneratedOutput;
+
+      if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
+        throw new Error("Invalid JSON structure from OpenAI");
+      }
+
+      return parsed;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+      }
+    }
+  }
+
+  throw new Error(`editProject failed after 3 attempts: ${lastError?.message}`);
+}
+
 export function parseGeneratedOutput(raw: string): GeneratedOutput {
   const cleaned = raw
     .replace(/^```json\s*/i, "")
