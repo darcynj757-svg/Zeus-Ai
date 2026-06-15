@@ -9,5 +9,5 @@
 export interface GenerateInput {
   /** @minLength 1 */
   message: string;
-  projectType?: 'landing' | 'app' | 'shop' | 'card';
+  projectType?: 'landing' | 'app' | 'shop' | 'card' | 'portfolio';
 }

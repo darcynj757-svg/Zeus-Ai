@@ -1072,8 +1072,8 @@ export default function Home() {
     if (projectsLoading || !projects) return;
     if (projects.length === 0 && !createdRef.current) {
       createdRef.current = true;
-      const savedType = sessionStorage.getItem("zeus_project_type") as "landing" | "app" | "shop" | "card" | null;
-      const typeLabels: Record<string, string> = { landing: "Лендинг", app: "Приложение", shop: "Магазин", card: "Визитка" };
+      const savedType = sessionStorage.getItem("zeus_project_type") as "landing" | "app" | "shop" | "card" | "portfolio" | null;
+      const typeLabels: Record<string, string> = { landing: "Лендинг", app: "Приложение", shop: "Магазин", card: "Визитка", portfolio: "Портфолио" };
       const projectName = savedType ? `${typeLabels[savedType] ?? "Проект"} ${Math.floor(Math.random() * 100)}` : "Моё приложение";
       createProject.mutate(
         { data: { name: projectName, projectType: savedType ?? "landing" } },

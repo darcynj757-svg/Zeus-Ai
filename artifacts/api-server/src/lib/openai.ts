@@ -377,7 +377,9 @@ Build a premium multi-section landing page. Structure in this exact order:
    2–3 quote cards with dark-glass style:
    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
    border-radius: var(--radius-xl); padding: 2rem; box-shadow: var(--shadow-lg).
-   60px round picsum avatars, name, role, 5-star Lucide icons. data-aos="fade-up".
+   60px round picsum avatars — MANDATORY onerror on every avatar img:
+     onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/60/60'"
+   Name, role, 5-star Lucide icons. data-aos="fade-up".
 
 8. FINAL CTA SECTION
    Background: var(--gradient-primary); color: #fff.
@@ -460,7 +462,8 @@ PHOTO TARGET: ≥ 5 real photo <img> tags (hero + featured categories + product 
 
 7. TESTIMONIALS — DARK SECTION
    Background: var(--gradient-section-dark); color: #fff.
-   3 glass-style cards. 60px round picsum avatars.
+   3 glass-style cards. 60px round picsum avatars — MANDATORY onerror on every avatar img:
+     onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/60/60'"
 
 8. FOOTER
    Background: var(--color-dark); color: #9ca3af. Store info, links, payment icons, copyright.
@@ -491,6 +494,7 @@ Contents:
 - Avatar: 120px circle, gradient background matching brand + initials (or picsum face photo)
   CSS animation: @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
   animation: float 4s ease-in-out infinite;
+  MANDATORY onerror on avatar img: onerror="this.onerror=null;this.src='https://picsum.photos/seed/avatar/120/120'"
 - Name: var(--text-3xl), font-display, font-weight 700
 - Title/role: var(--text-base), opacity 0.7
 - Bio: 1–2 sentence tagline, var(--text-sm), opacity 0.8
@@ -503,6 +507,134 @@ Contents:
 
 Dark/light toggle (top-right): Lucide sun/moon — toggling class on <body> that switches
 the card to a white background + dark text mode.`,
+
+  portfolio: `
+═══════════════════════════════════════
+PROJECT TYPE: PERSONAL PORTFOLIO SITE
+═══════════════════════════════════════
+PHOTO TARGET: ≥ 6 real photo <img> tags (hero + work cards + about — easily reached).
+This is a plain browser site (no build step) — index.html + style.css + script.js.
+
+Build a premium personal portfolio for a specialist (designer, developer, photographer, etc.).
+Structure in this EXACT order:
+
+1. STICKY HEADER / NAV
+   Logo = specialist's name in display font (e.g. "Alex Morgan") + small role badge.
+   Anchor links: #work, #skills, #about, #testimonials, #contact.
+   Transparent at top; on scroll: backdrop-filter:blur(12px) + background + var(--shadow-md).
+   Hamburger (Lucide menu/x) on mobile. All links use smooth scroll.
+
+2. HERO — full-viewport, premium treatment [PHOTO #1]
+   • Background photo: <img> position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0
+     Use curated images.unsplash.com portfolio/workspace ID:
+       1499750310107-5fef28a66643 (creative workspace)  ← preferred for hero
+       or 1467232004584-a241de8bcf5d (laptop at desk)
+       or 1522202176988-66273c2fd55f (team collaboration)
+     alt="Creative workspace", loading="lazy",
+     onerror="this.onerror=null;this.src='https://picsum.photos/seed/hero/1600/900'"
+   • Gradient overlay (z-index:1): background: var(--gradient-hero)
+     — linear-gradient from semi-transparent brand primary to near-black, NOT plain black.
+   • Content (z-index:2, centred): role pill → name headline (var(--text-5xl), animate__fadeInDown) →
+     tagline (var(--text-xl), animate__fadeInUp animate__delay-1s) →
+     2 CTA buttons: [View My Work → #work] [Download CV].
+   • OVERLAPPING HERO-STATS CARD (.hero-stats):
+     position:relative; z-index:10; margin-top:-40px;
+     background: var(--color-bg); border-radius: var(--radius-xl); box-shadow: var(--shadow-xl);
+     padding: 1.5rem 2.5rem; max-width: 800px; margin-inline: auto;
+     display: flex; gap: 2rem; justify-content: space-around; flex-wrap: wrap;
+     Show 3–4 key stats: "12+ Projects · 5 Years Experience · 30+ Clients · 4.9★ Rating"
+
+3. WORK / PROJECTS [PHOTO #2–#7]
+   id="work". Background: var(--color-surface).
+   Section heading + subheading, data-aos="fade-up".
+   CSS Grid (1 → 2 → 3 columns, gap 1.5rem). 4–6 project case cards:
+   Each card (.project-card):
+     border-radius: var(--radius-xl); box-shadow: var(--shadow-md); overflow: hidden;
+     transition: transform var(--transition-base), box-shadow var(--transition-base);
+     hover: transform: translateY(-6px); box-shadow: var(--shadow-xl);
+   Card structure:
+     • Photo container (height: 240px): real thematic photo via images.unsplash.com or loremflickr.
+       Each card gets a UNIQUE, DIFFERENT photo URL. Use loremflickr keywords:
+       design, branding, website, mobile, photography, illustration, ux, development
+       Format: <img src="https://loremflickr.com/800/480/keyword?lock=UNIQUE_NUMBER" ...>
+       MANDATORY on every project card img:
+         alt="Project preview — [project name]"
+         loading="lazy"
+         height="240"
+         style="width:100%;height:240px;object-fit:cover;"
+         onerror="this.onerror=null;this.src='https://picsum.photos/seed/proj'+Math.random()+'/800/480'"
+     • Card body: category tag pill (gradient bg) + project title (font-weight 700) +
+       short description (2–3 lines) + tech tags + "View Case →" link.
+   data-aos="fade-up" with staggered delays (0, 100, 200, 300…).
+
+4. SKILLS
+   id="skills". Background: var(--color-bg).
+   Section heading + subheading, data-aos="fade-up".
+   2-column grid of skill groups (e.g. Design / Development). Each group has 4–6 skills.
+   Each skill row:
+     skill name (left) + percentage label (right) + animated progress bar below.
+   Progress bar markup:
+     <div class="skill-bar-track">
+       <div class="skill-bar-fill" data-width="85" style="width:0%"></div>
+     </div>
+   CSS for track: height:8px; background:var(--color-border); border-radius:var(--radius-full); overflow:hidden;
+   CSS for fill: height:100%; background:var(--gradient-primary); border-radius:var(--radius-full);
+     transition: width 1.2s cubic-bezier(0.4,0,0.2,1);
+   Animation: use IntersectionObserver in script.js — when .skill-bar-fill enters viewport,
+     set style.width = el.dataset.width + '%'. Trigger once (observer.unobserve after setting).
+   AOS: data-aos="fade-right" on each skill row with staggered delays.
+
+5. ABOUT
+   id="about". Background: var(--color-primary-light).
+   2-column layout (desktop): text left + photo right.
+   Photo: <img> height: 500px; width: 100%; object-fit: cover; border-radius: var(--radius-xl);
+     src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&q=80"
+     alt="About me — workspace photo"
+     loading="lazy"
+     onerror="this.onerror=null;this.src='https://picsum.photos/seed/about/800/600'"
+   Text side: personal headline + 2–3 paragraphs of bio + key values list (Lucide check icons) +
+     "Download CV" button (gradient).
+   data-aos="fade-right" on text, data-aos="fade-left" on photo.
+
+6. TESTIMONIALS — DARK SECTION
+   id="testimonials". Background: var(--gradient-section-dark); color: #fff.
+   Section heading + subheading (white text).
+   2–3 glassmorphism quote cards:
+     background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+     border-radius: var(--radius-xl); padding: 2rem; box-shadow: var(--shadow-lg);
+   Each card: blockquote text + author row (avatar + name + role + 5 Lucide star icons).
+   Avatar: 60px round <img> from picsum.photos/seed/<name>/60/60.
+   MANDATORY on every avatar img:
+     loading="lazy"
+     alt="[Client name] avatar"
+     onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/60/60'"
+   data-aos="fade-up" with staggered delays.
+
+7. CONTACT
+   id="contact". Background: var(--color-bg).
+   2-column layout (desktop): form left + info/socials right.
+   Form fields: Name (text), Email (email), Message (textarea, min 5 rows).
+   Each field: label + input with focus ring using var(--color-primary).
+   "Send Message" submit button: var(--gradient-primary) background, full width.
+   JS validation (in script.js):
+     • On submit: check name ≥ 2 chars, valid email regex, message ≥ 10 chars.
+     • Inline error messages (.error-msg) shown below invalid fields.
+     • On success: replace form content with success message ("✓ Message sent! I'll reply within 24h").
+     • NO real network request — purely client-side demo.
+   Right column: email address, phone, location (Lucide mail/phone/map-pin) +
+     social icon links (Lucide: github, linkedin, twitter, instagram, dribbble)
+     each in a circle button (hover: gradient bg + shadow-glow).
+
+8. FOOTER
+   Background: var(--color-dark); color: #9ca3af.
+   Name/logo + short tagline | anchor nav links | social icons. Copyright line.
+
+ALL SECTIONS: padding: clamp(80px, 10vw, 120px) 0. data-aos="fade-up" on every section.
+Section background rotation (no two adjacent sections same):
+  hero → (dark overlay), hero-stats → var(--color-bg),
+  work → var(--color-surface), skills → var(--color-bg),
+  about → var(--color-primary-light), testimonials → var(--gradient-section-dark) [DARK],
+  contact → var(--color-bg), footer → var(--color-dark).`,
 };
 
 export function getTypePrompt(projectType?: string | null): string {

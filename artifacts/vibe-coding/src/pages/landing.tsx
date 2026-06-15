@@ -5,11 +5,12 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 const NAV_LINKS = ["Шаблоны", "Тарифы", "Примеры", "Блог"];
 
-const TABS: Array<{ icon: string; label: string; type: "landing" | "app" | "shop" | "card"; desc: string }> = [
-  { icon: "🌐", label: "Сайт-лендинг",    type: "landing", desc: "Многосекционный сайт: hero, преимущества, цены, отзывы, footer" },
-  { icon: "⚡", label: "Приложение",       type: "app",     desc: "SPA на React с состоянием, localStorage и несколькими экранами" },
-  { icon: "🛒", label: "Интернет-магазин", type: "shop",    desc: "Каталог товаров с фильтрами, корзиной и оформлением заказа" },
-  { icon: "🪪", label: "Визитка",          type: "card",    desc: "Одностраничная визитка: контакты, соцсети, кнопка «Связаться»" },
+const TABS: Array<{ icon: string; label: string; type: "landing" | "app" | "shop" | "card" | "portfolio"; desc: string }> = [
+  { icon: "🌐", label: "Сайт-лендинг",    type: "landing",   desc: "Многосекционный сайт: hero, преимущества, цены, отзывы, footer" },
+  { icon: "⚡", label: "Приложение",       type: "app",       desc: "SPA на React с состоянием, localStorage и несколькими экранами" },
+  { icon: "🛒", label: "Интернет-магазин", type: "shop",      desc: "Каталог товаров с фильтрами, корзиной и оформлением заказа" },
+  { icon: "🪪", label: "Визитка",          type: "card",      desc: "Одностраничная визитка: контакты, соцсети, кнопка «Связаться»" },
+  { icon: "🎨", label: "Портфолио",        type: "portfolio", desc: "Личный сайт специалиста: проекты, навыки, отзывы, форма контакта" },
 ];
 
 const CHIP_PROMPTS = [
