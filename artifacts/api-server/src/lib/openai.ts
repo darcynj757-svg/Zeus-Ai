@@ -232,12 +232,15 @@ DESIGN SYSTEM  (apply to every project)
    • Section padding: padding: clamp(80px, 10vw, 120px) 0   ← generous vertical rhythm
    • Consistent horizontal gutters via gap / column-gap
 
-7. MOBILE-FIRST RESPONSIVE:
-   • Base styles target mobile (≤ 480 px)
-   • @media (min-width: 768px)  — tablet
-   • @media (min-width: 1024px) — desktop
-   • Stack columns on mobile, switch to grid on tablet+
-   • Touch targets ≥ 44 px
+7. MOBILE-FIRST RESPONSIVE — 3 MANDATORY BREAKPOINTS:
+   • Base styles target mobile (≤ 480 px): single-column, stacked layout
+   • @media (min-width: 481px)  — large mobile / portrait tablet adjustments
+   • @media (min-width: 768px)  — tablet: 2-column grids unlock, nav row
+   • @media (min-width: 1024px) — desktop: full multi-column grids, max widths
+   Rules: every multi-column grid/flex collapses to 1 column on mobile.
+   Font sizes/spacing MUST decrease on mobile (use the clamp() vars).
+   NO horizontal overflow (max-width:100%; overflow-x:hidden on body).
+   Touch targets ≥ 44 px.
 
 8. BUTTONS:
    • Primary: background: var(--gradient-primary); color: #fff; border-radius: var(--radius-full);
@@ -289,6 +292,77 @@ ACCESSIBILITY & SEMANTICS
 - Colour contrast: text on background must pass WCAG AA (≥ 4.5:1 for body, ≥ 3:1 for large)
 
 ═══════════════════════════════════════
+RESPONSIVE / PERFORMANCE / ACCESSIBILITY  (R-P-A — mandatory for EVERY project)
+═══════════════════════════════════════
+
+R1. RESPONSIVE — 3 REAL BREAKPOINTS (hard requirement)
+────────────────────────────────────────────────────────
+• body { overflow-x: hidden; max-width: 100%; } — NO horizontal scroll on any viewport.
+• Base CSS (no @media): single-column layout, mobile sizes.
+• @media (min-width: 481px)  — large-mobile adjustments (font bumps, wider padding).
+• @media (min-width: 768px)  — tablet: 2-column grids, horizontal nav row shows.
+• @media (min-width: 1024px) — desktop: full multi-column, larger hero, side-by-side panels.
+• Every CSS Grid / Flexbox multi-column layout MUST collapse to 1 column at ≤ 480 px.
+• BURGER MENU — mandatory keyboard-accessible implementation:
+    HTML: <button class="hamburger" aria-label="Открыть меню" aria-expanded="false" aria-controls="nav-menu">
+            <i data-lucide="menu" aria-hidden="true"></i>
+          </button>
+          <ul id="nav-menu" class="nav-links" role="list"> … </ul>
+    CSS (mobile base): .nav-links { display:none; } — hidden by default on mobile.
+          .nav-links.nav-open { display:flex; flex-direction:column; … }
+    CSS (tablet+): @media (min-width:768px) { .nav-links { display:flex!important; flex-direction:row; } .hamburger { display:none; } }
+    JS: toggle .nav-open on nav-links, toggle aria-expanded on button, swap lucide icon menu↔x.
+    Keyboard: hamburger triggers on Enter/Space; Escape closes menu.
+
+R2. PERFORMANCE — RESOURCE HINTS + IMAGE SIZING
+────────────────────────────────────────────────────────
+• In <head>, BEFORE the first external CSS/font link, add preconnect hints for every CDN used:
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://images.unsplash.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://unpkg.com">
+• Every <img> MUST have BOTH width AND height attributes (in px matching the rendered size OR the natural size):
+    ✓ <img src="…" width="1200" height="675" …>   — hero
+    ✓ <img src="…" width="800"  height="480" …>   — section photo
+    ✓ <img src="…" width="60"   height="60"  …>   — avatar
+  This prevents CLS (Cumulative Layout Shift).
+• loading="lazy" on ALL <img> EXCEPT the hero photo (hero gets loading="eager" or no attribute).
+• decoding="async" on ALL <img> tags.
+• Hero photo specifically: loading="eager" fetchpriority="high" (LCP optimisation).
+
+R3. ACCESSIBILITY — FOCUS, LABELS, ARIA
+────────────────────────────────────────────────────────
+• :focus-visible ring on EVERY focusable element — add globally in style.css:
+    :focus-visible {
+      outline: 3px solid var(--color-primary);
+      outline-offset: 3px;
+      border-radius: var(--radius-sm);
+    }
+• Form fields: every <input> / <textarea> / <select> MUST have a visible <label> (or sr-only class):
+    .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+               overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+• Icon-only buttons / icon links MUST have aria-label="…" describing the action.
+• All images: meaningful alt text (NOT empty, NOT "image", NOT filename).
+• Colour contrast: body text on background must pass WCAG AA (≥ 4.5:1).
+• Decorative images (pure ambiance, no info): alt="" to hide from screen readers.
+
+R4. REDUCED MOTION — mandatory @media block
+────────────────────────────────────────────────────────
+• At the END of style.css, always include:
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+• In script.js, disable AOS when the user prefers reduced motion:
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    AOS.init({ duration: prefersReduced ? 0 : 700, once: true, offset: 80 });
+
+═══════════════════════════════════════
 QUALITY BAR
 ═══════════════════════════════════════
 Before finalising, mentally review each item — if any box is unchecked, fix it before outputting:
@@ -301,15 +375,21 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ CARD RADIUS: is border-radius ≥ 16px (var(--radius-xl)) on all cards?
 □ GRADIENT BUTTONS: do primary CTAs use var(--gradient-primary) or equivalent gradient background?
 □ Real <img> tags using images.unsplash.com or loremflickr everywhere (zero CSS/emoji placeholders, zero source.unsplash.com)?
-□ Every <img> has alt + loading="lazy" + onerror fallback to picsum + explicit height?
+□ Every <img> has: meaningful alt + loading="lazy" (eager on hero) + decoding="async" + onerror fallback + explicit width AND height attributes?
 □ Lucide loaded in <head>, lucide.createIcons() called in script.js?
-□ AOS loaded in <head>, AOS.init() called, data-aos on every section and card?
+□ AOS loaded in <head>, AOS.init() with prefers-reduced-motion check, data-aos on every section and card?
 □ Hero headline/subheadline have Animate.css classes?
-□ Hamburger menu works on mobile (toggle + icon swap)?
+□ [R1] RESPONSIVE: ≥ 3 @media breakpoints (481/768/1024)? Every grid collapses to 1-col on mobile? body has overflow-x:hidden?
+□ [R1] BURGER MENU: <button class="hamburger" aria-label aria-expanded aria-controls> present? JS toggles nav-open + aria-expanded + icon? Keyboard-accessible (Enter/Space/Escape)?
+□ [R2] PRECONNECT: <link rel="preconnect"> for fonts.googleapis.com, fonts.gstatic.com crossorigin, images.unsplash.com, cdn.jsdelivr.net, unpkg.com in <head>?
+□ [R2] IMG SIZING: every <img> has BOTH width AND height numeric attributes to prevent layout shift?
+□ [R3] :focus-visible: global rule in style.css using var(--color-primary)?
+□ [R3] FORM LABELS: every input/textarea has a <label> (visible or .sr-only)?
+□ [R3] ARIA-LABEL: every icon-only button/link has aria-label?
+□ [R4] REDUCED MOTION: @media (prefers-reduced-motion: reduce) block at end of style.css? AOS.init uses prefersReduced check?
 □ Smooth scroll + navbar scroll effect implemented?
 □ VERTICAL RHYTHM: section padding ≥ 80px top/bottom (clamp to 120px)?
 □ Type scale clearly hierarchical (hero 48–80px, sections 28–40px, body 16–18px)?
-□ Layout responsive from 320 px to 1440 px?
 □ All copy specific and meaningful (zero placeholders)?
 □ Colour palette cohesive and brand-appropriate?
 
