@@ -10,4 +10,5 @@ export interface GenerateInput {
   /** @minLength 1 */
   message: string;
   projectType?: 'landing' | 'app' | 'shop' | 'card' | 'portfolio';
+  style?: 'minimal' | 'bold' | 'glass' | 'dark' | 'playful' | 'elegant';
 }

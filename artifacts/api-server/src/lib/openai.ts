@@ -911,6 +911,408 @@ export function getTypePrompt(projectType?: string | null): string {
   return TYPE_PROMPTS[type] ?? TYPE_PROMPTS["landing"];
 }
 
+const STYLE_PROMPTS: Record<string, string> = {
+  minimal: `
+═══════════════════════════════════════
+VISUAL STYLE: MINIMAL
+═══════════════════════════════════════
+Override the default design system with these EXACT values — they take precedence over any defaults:
+
+CSS VARIABLES (:root overrides):
+  --color-bg: #fafafa;
+  --color-surface: #f4f4f4;
+  --color-primary: #111111;
+  --color-primary-hover: #333333;
+  --color-primary-light: rgba(17,17,17,0.04);
+  --color-accent: #e84040;          /* one vivid accent — keep it SINGULAR */
+  --color-dark: #0a0a0a;
+  --color-text: #1a1a1a;
+  --color-text-muted: #888888;
+  --color-border: rgba(0,0,0,0.09);
+  --gradient-hero: linear-gradient(160deg, rgba(17,17,17,0.55) 0%, rgba(17,17,17,0.82) 100%);
+  --gradient-primary: linear-gradient(135deg, #111111 0%, #333333 100%);
+  --gradient-section-dark: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:  0 2px 6px rgba(0,0,0,0.06);
+  --shadow-lg:  0 4px 16px rgba(0,0,0,0.07);
+  --shadow-xl:  0 8px 28px rgba(0,0,0,0.09);
+  --shadow-glow: none;
+  --radius-sm: 4px; --radius-md: 6px; --radius-lg: 8px;
+  --radius-xl: 10px; --radius-2xl: 14px; --radius-full: 9999px;
+
+TYPOGRAPHY (load via Google Fonts):
+  Display heading font: 'DM Serif Display' or 'Cormorant Garamond', serif
+  Body font: 'DM Sans' or 'Inter', weight 300–400
+  Hero headline: font-weight: 300; letter-spacing: -0.02em; color: #fff
+  Section labels: font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--color-text-muted)
+  Body: font-weight: 300; line-height: 1.75; color: var(--color-text-muted)
+
+SHAPES & BORDERS:
+  Cards: border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: #fff; box-shadow: none;
+  Card hover: box-shadow: var(--shadow-sm); transform: none; (no translateY lift — keep it flat)
+  Buttons: border-radius: var(--radius-sm); letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.8rem;
+  Primary button: background: #111; color: #fff; border: none; padding: 0.9rem 2.4rem;
+  Secondary button: background: transparent; border: 1px solid #111; color: #111;
+
+WHITESPACE & RHYTHM:
+  Section padding: clamp(100px, 12vw, 160px) 0  ← extra generous
+  Card gaps: clamp(1.5rem, 4vw, 3rem)
+  Generous margins between text blocks (margin-bottom: 2rem on body paragraphs)
+
+ANIMATIONS:
+  AOS: data-aos="fade-in" ONLY — no slide, no zoom. duration: 800, once: true
+  Animate.css on hero: animate__fadeIn ONLY (no fadeInDown / fadeInUp)
+  Transitions: all 300ms ease — opacity and color only, no transforms on cards
+  NO bouncy, NO spring animations
+
+SECTION BACKGROUNDS (minimal alternation — almost all white/off-white):
+  All sections: #fafafa or #fff — vary only by very subtle shade
+  ONE dark section (testimonials): background: #0a0a0a; color: #f0f0f0
+  CTA section: background: #111; color: #fff (flat, no gradient)
+  Footer: background: #0a0a0a; color: #888
+
+HERO:
+  Gradient overlay must be dark and muted — no vibrant colour tint.
+  Overlay: rgba(0,0,0,0.65) simple or linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.75))
+  Headline: huge, thin weight (300), wide letter-spacing, all lowercase or sentence case
+  NO decorative blobs, NO hero-stats card — keep it clean and empty below headline`,
+
+  bold: `
+═══════════════════════════════════════
+VISUAL STYLE: BOLD
+═══════════════════════════════════════
+Override the default design system with these EXACT values — they take precedence over any defaults:
+
+CSS VARIABLES (:root overrides):
+  --color-bg: #ffffff;
+  --color-surface: #f0f0f0;
+  --color-primary: #e61919;         /* aggressive saturated red — adapt to brand */
+  --color-primary-hover: #c00;
+  --color-primary-light: rgba(230,25,25,0.07);
+  --color-accent: #0a0a0a;          /* black as secondary accent */
+  --color-dark: #0a0a0a;
+  --color-text: #0a0a0a;
+  --color-text-muted: #444444;
+  --color-border: rgba(0,0,0,0.12);
+  --gradient-hero: linear-gradient(135deg, rgba(230,25,25,0.82) 0%, rgba(10,10,10,0.92) 100%);
+  --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, #9b0000 100%);
+  --gradient-section-dark: linear-gradient(135deg, #0a0a0a 0%, #1a0000 100%);
+  --shadow-sm:  0 2px 4px rgba(0,0,0,0.12);
+  --shadow-md:  0 6px 20px rgba(0,0,0,0.18);
+  --shadow-lg:  0 12px 40px rgba(0,0,0,0.22);
+  --shadow-xl:  0 24px 60px rgba(0,0,0,0.28);
+  --shadow-glow: 0 0 40px rgba(230,25,25,0.40);
+  --radius-sm: 2px; --radius-md: 4px; --radius-lg: 6px;
+  --radius-xl: 8px; --radius-2xl: 12px; --radius-full: 9999px;
+
+TYPOGRAPHY (load via Google Fonts):
+  Display heading font: 'Syne' or 'Bebas Neue' or 'Oswald', weight 700–900
+  Body font: 'Inter' or 'DM Sans', weight 400–500
+  Hero headline: font-weight: 900; font-size: clamp(3.5rem, 9vw, 7rem); line-height: 0.95; text-transform: uppercase; letter-spacing: -0.03em
+  Section headings: font-weight: 800; text-transform: uppercase; letter-spacing: -0.01em
+  Body: font-weight: 400; line-height: 1.6
+
+SHAPES:
+  Cards: border-radius: var(--radius-md); (almost square corners)
+  Card hover: translateY(-4px) + var(--shadow-xl) + left border 4px solid var(--color-primary)
+  Primary buttons: border-radius: var(--radius-sm); padding: 1rem 2.8rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.9rem
+  Use thick left-border accents on feature cards: border-left: 4px solid var(--color-primary)
+
+SECTION BACKGROUNDS (strong contrast between sections):
+  Hero: full black overlay, big bold headline fills the frame
+  Features: background: #f0f0f0 (solid grey)
+  About: background: #0a0a0a; color: #fff  ← dark early
+  Gallery: background: #fff
+  Pricing: background: var(--color-primary); color: #fff  ← brand colour block
+  Testimonials: background: #0a0a0a; color: #fff
+  CTA: background: #fff; border-top: 6px solid var(--color-primary)
+  Footer: background: #0a0a0a; color: #888
+
+ANIMATIONS:
+  AOS: data-aos="fade-up" with short duration 400ms — snappy
+  Animate.css hero: animate__fadeInDown (headline), animate__fadeInUp (sub)
+  Card hover: fast 150ms — no bounce`,
+
+  glass: `
+═══════════════════════════════════════
+VISUAL STYLE: GLASS (Glassmorphism)
+═══════════════════════════════════════
+Override the default design system with these EXACT values — they take precedence over any defaults:
+
+CSS VARIABLES (:root overrides):
+  --color-bg: #f0f4ff;              /* soft blue-white base */
+  --color-surface: #e8eef8;
+  --color-primary: #6366f1;         /* indigo — adapt to brand */
+  --color-primary-hover: #4f46e5;
+  --color-primary-light: rgba(99,102,241,0.10);
+  --color-accent: #a78bfa;          /* softer violet */
+  --color-dark: #1e1b4b;
+  --color-text: #1e1b4b;
+  --color-text-muted: #6b7280;
+  --color-border: rgba(255,255,255,0.45);
+  --gradient-hero: linear-gradient(135deg, rgba(99,102,241,0.65) 0%, rgba(30,27,75,0.80) 100%);
+  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #a78bfa 100%);
+  --gradient-section-dark: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+  --shadow-sm:  0 2px 8px rgba(99,102,241,0.08);
+  --shadow-md:  0 8px 24px rgba(99,102,241,0.12);
+  --shadow-lg:  0 16px 48px rgba(99,102,241,0.16);
+  --shadow-xl:  0 24px 64px rgba(99,102,241,0.22);
+  --shadow-glow: 0 0 40px rgba(99,102,241,0.35);
+  --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px;
+  --radius-xl: 22px; --radius-2xl: 28px; --radius-full: 9999px;
+
+GLASSMORPHISM CARDS (mandatory on ALL card components):
+  background: rgba(255,255,255,0.20);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.45);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 8px 32px rgba(99,102,241,0.12);
+  Card hover: box-shadow: var(--shadow-lg); transform: translateY(-4px); border-color: rgba(255,255,255,0.65);
+
+SECTION BACKGROUNDS (gradient-mesh base — glass floats above gradients):
+  Page body: background: linear-gradient(135deg, #f0f4ff 0%, #e8eef8 50%, #ede9fe 100%); (fixed gradient base)
+  Sections alternate between transparent (showing body gradient) and semi-opaque white:
+    Features: background: rgba(255,255,255,0.30); backdrop-filter: blur(4px);
+    About: background: transparent
+    Gallery: background: rgba(255,255,255,0.20); backdrop-filter: blur(8px);
+    Pricing: background: rgba(99,102,241,0.08);
+    Testimonials (DARK): background: rgba(30,27,75,0.88); backdrop-filter: blur(20px); color: #fff
+    CTA: background: var(--gradient-primary); (solid gradient)
+    Footer: background: rgba(30,27,75,0.92); color: #d1d5db
+
+TYPOGRAPHY (load via Google Fonts):
+  Display heading font: 'Plus Jakarta Sans' or 'Outfit', weight 600–700
+  Body font: 'Inter', weight 400
+  Hero headline: font-weight: 700; text-shadow: 0 2px 12px rgba(0,0,0,0.2)
+  Body: line-height: 1.7
+
+HERO special treatment:
+  Gradient overlay uses brand indigo — var(--gradient-hero)
+  Add frosted glass container for headline content: background: rgba(255,255,255,0.10); backdrop-filter: blur(12px); border-radius: var(--radius-2xl); padding: 3rem; border: 1px solid rgba(255,255,255,0.25)
+
+ANIMATIONS:
+  AOS: data-aos="fade-up" duration 600ms
+  Animate.css on hero: animate__fadeInDown + animate__fadeInUp
+  Card hover transition: 250ms ease — smooth glass reflection shift`,
+
+  dark: `
+═══════════════════════════════════════
+VISUAL STYLE: DARK (Neon Dark Theme)
+═══════════════════════════════════════
+Override the default design system with these EXACT values — they take precedence over any defaults:
+
+CSS VARIABLES (:root overrides):
+  --color-bg: #0a0a0f;
+  --color-surface: #111118;
+  --color-primary: #a78bfa;         /* violet neon — adapt to brand */
+  --color-primary-hover: #8b5cf6;
+  --color-primary-light: rgba(167,139,250,0.10);
+  --color-accent: #22d3ee;          /* cyan neon complement */
+  --color-dark: #05050a;
+  --color-text: #e2e8f0;
+  --color-text-muted: #6b7280;
+  --color-border: rgba(255,255,255,0.07);
+  --gradient-hero: linear-gradient(135deg, rgba(167,139,250,0.45) 0%, rgba(5,5,10,0.92) 100%);
+  --gradient-primary: linear-gradient(135deg, #a78bfa 0%, #22d3ee 100%);
+  --gradient-section-dark: linear-gradient(135deg, #05050a 0%, #0f0f1a 100%);
+  --shadow-sm:  0 2px 8px rgba(0,0,0,0.40);
+  --shadow-md:  0 6px 24px rgba(0,0,0,0.50);
+  --shadow-lg:  0 12px 40px rgba(0,0,0,0.60);
+  --shadow-xl:  0 20px 60px rgba(0,0,0,0.70);
+  --shadow-glow: 0 0 30px rgba(167,139,250,0.50);
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --radius-xl: 20px; --radius-2xl: 28px; --radius-full: 9999px;
+
+DARK PAGE BASE:
+  html, body: background-color: #0a0a0f; color: #e2e8f0;
+  ALL sections have dark backgrounds — this is a fully dark-themed page
+
+NEON CARDS (mandatory on ALL card components):
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(167,139,250,0.15);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.40);
+  Card hover: border-color: rgba(167,139,250,0.45); box-shadow: var(--shadow-glow); transform: translateY(-4px);
+
+NEON ACCENTS (use throughout):
+  Primary text accent: color: var(--color-primary)  — violet
+  Secondary accent: color: var(--color-accent)  — cyan
+  Gradient text on hero headline: background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  Icon glow: filter: drop-shadow(0 0 8px rgba(167,139,250,0.6))
+  Glow buttons: box-shadow: 0 0 20px rgba(167,139,250,0.45) on hover
+
+SECTION BACKGROUNDS (ALL dark — vary only shade):
+  Features: background: #111118
+  About: background: #0d0d14
+  Gallery: background: #0a0a0f
+  Pricing: background: #111118; highlight card gets border: 1px solid var(--color-primary) + shadow-glow
+  Testimonials: background: #0d0d14; cards use neon-border style above
+  CTA: background: var(--gradient-primary) (neon gradient band)
+  Footer: background: #05050a
+
+TYPOGRAPHY (load via Google Fonts):
+  Display heading font: 'Syne' or 'Space Grotesk', weight 700–800
+  Body font: 'Inter', weight 400
+  Hero headline: gradient text (neon gradient), font-weight: 800; font-size: clamp(3rem, 8vw, 5.5rem)
+  Body text: color: #94a3b8
+
+HERO:
+  Full dark overlay + neon gradient accent
+  Add ambient neon glow blobs (CSS only, pointer-events:none): two absolute divs with radial-gradient neon colour, opacity 0.15, blur-3xl
+
+ANIMATIONS:
+  AOS: data-aos="fade-up" duration 600ms
+  Add subtle CSS @keyframes neon-pulse: { 0%,100%{opacity:0.6} 50%{opacity:1} } on neon accents
+  Card hover: border glow + shadow-glow, 200ms ease`,
+
+  playful: `
+═══════════════════════════════════════
+VISUAL STYLE: PLAYFUL
+═══════════════════════════════════════
+Override the default design system with these EXACT values — they take precedence over any defaults:
+
+CSS VARIABLES (:root overrides):
+  --color-bg: #fffbf5;              /* warm cream */
+  --color-surface: #fff5e6;
+  --color-primary: #ff6b35;         /* energetic orange — adapt to brand */
+  --color-primary-hover: #e85520;
+  --color-primary-light: rgba(255,107,53,0.10);
+  --color-accent: #6b48ff;          /* complementary purple */
+  --color-dark: #1a1035;
+  --color-text: #1a1035;
+  --color-text-muted: #6b6b8a;
+  --color-border: rgba(0,0,0,0.08);
+  --gradient-hero: linear-gradient(135deg, rgba(255,107,53,0.70) 0%, rgba(107,72,255,0.75) 100%);
+  --gradient-primary: linear-gradient(135deg, #ff6b35 0%, #6b48ff 100%);
+  --gradient-section-dark: linear-gradient(135deg, #1a1035 0%, #2d1b69 100%);
+  --shadow-sm:  4px 4px 0px rgba(0,0,0,0.12);
+  --shadow-md:  6px 6px 0px rgba(0,0,0,0.15);
+  --shadow-lg:  8px 8px 0px rgba(0,0,0,0.18);
+  --shadow-xl:  12px 12px 0px rgba(0,0,0,0.20);
+  --shadow-glow: 0 0 30px rgba(255,107,53,0.40);
+  --radius-sm: 16px; --radius-md: 20px; --radius-lg: 24px;
+  --radius-xl: 28px; --radius-2xl: 32px; --radius-full: 9999px;
+
+PLAYFUL CARDS (mandatory — offset shadow style):
+  background: #fff;
+  border: 2px solid #1a1035;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);  /* offset hard shadow, NOT blurred */
+  Card hover: box-shadow: var(--shadow-lg); transform: translate(-2px,-2px);  /* comic-book lift */
+  Card hover transition: 150ms cubic-bezier(0.68,-0.55,0.265,1.55)  /* spring bounce */
+
+BUTTONS (extra bold and rounded):
+  Primary: background: var(--gradient-primary); border-radius: var(--radius-full); padding: 1rem 2.5rem; font-weight: 800; font-size: 1rem; border: 2px solid #1a1035; box-shadow: 4px 4px 0px #1a1035;
+  Primary hover: transform: translate(-2px,-2px); box-shadow: 6px 6px 0px #1a1035;
+  Secondary: background: #fff; border: 2px solid #1a1035; color: #1a1035; border-radius: var(--radius-full); box-shadow: 3px 3px 0px #1a1035;
+
+TYPOGRAPHY (load via Google Fonts):
+  Display heading font: 'Nunito' or 'Fredoka One', weight 700–900
+  Body font: 'Nunito' or 'Poppins', weight 400–500
+  Hero headline: font-weight: 900; letter-spacing: -0.02em; color: #fff
+  Section headings: font-weight: 800; color: var(--color-text)
+  Add colorful text spans: <span style="color:var(--color-primary)"> on key words
+
+SECTION BACKGROUNDS (bright and varied — each section a DIFFERENT colour):
+  Features: background: #fff5e6  (warm cream)
+  About: background: #e8f0ff  (light blue)
+  Gallery: background: #fff0e6  (warm)
+  Pricing: background: #f0e8ff  (light purple)
+  Testimonials: background: var(--gradient-section-dark); color: #fff
+  CTA: background: var(--gradient-primary); color: #fff
+  Footer: background: #1a1035; color: #a0a0c0
+
+DECORATIVE ELEMENTS:
+  Add 2–3 floating emoji or colourful blobs as CSS background decorations (pointer-events:none; position:absolute; font-size:4rem; opacity:0.12; rotation: ±15deg)
+  Use wavy section dividers: border-radius: 50% / 20px at section tops
+
+ANIMATIONS:
+  AOS: data-aos="zoom-in" + data-aos="fade-up" mixed; duration 500ms
+  Card entrance: data-aos="zoom-in" with staggered data-aos-delay
+  Animate.css hero: animate__bounceIn (headline), animate__fadeInUp (sub)
+  Hover transitions: cubic-bezier(0.68,-0.55,0.265,1.55) — spring bounce feel`,
+
+  elegant: `
+═══════════════════════════════════════
+VISUAL STYLE: ELEGANT (Luxury)
+═══════════════════════════════════════
+Override the default design system with these EXACT values — they take precedence over any defaults:
+
+CSS VARIABLES (:root overrides):
+  --color-bg: #faf9f6;              /* warm ivory */
+  --color-surface: #f4f1eb;
+  --color-primary: #c9a96e;         /* warm gold */
+  --color-primary-hover: #b8934e;
+  --color-primary-light: rgba(201,169,110,0.08);
+  --color-accent: #1c2b3a;          /* deep navy */
+  --color-dark: #0f1824;
+  --color-text: #1c2b3a;
+  --color-text-muted: #7a7265;
+  --color-border: rgba(201,169,110,0.20);
+  --gradient-hero: linear-gradient(160deg, rgba(28,43,58,0.60) 0%, rgba(15,24,36,0.85) 100%);
+  --gradient-primary: linear-gradient(135deg, #c9a96e 0%, #e8c98a 50%, #c9a96e 100%);
+  --gradient-section-dark: linear-gradient(135deg, #0f1824 0%, #1c2b3a 100%);
+  --shadow-sm:  0 1px 4px rgba(28,43,58,0.05);
+  --shadow-md:  0 4px 20px rgba(28,43,58,0.08);
+  --shadow-lg:  0 12px 48px rgba(28,43,58,0.12);
+  --shadow-xl:  0 24px 72px rgba(28,43,58,0.16);
+  --shadow-glow: 0 0 40px rgba(201,169,110,0.30);
+  --radius-sm: 2px; --radius-md: 4px; --radius-lg: 6px;
+  --radius-xl: 8px; --radius-2xl: 12px; --radius-full: 9999px;
+
+ELEGANT CARDS:
+  background: #fff;
+  border: 1px solid rgba(201,169,110,0.15);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  Card hover: box-shadow: var(--shadow-lg); transform: translateY(-3px); border-color: rgba(201,169,110,0.35);
+  Card transition: 350ms ease
+
+TYPOGRAPHY (MANDATORY — serif display):
+  Display heading font: MUST use 'Cormorant Garamond' or 'Playfair Display', weight 400–700, style italic for hero
+  Body font: 'Jost' or 'EB Garamond', weight 300–400
+  Hero headline: font-family: var(--font-display); font-style: italic; font-weight: 400; font-size: clamp(3rem, 7vw, 5.5rem); letter-spacing: 0.01em; color: #fff
+  Section headings: font-family: var(--font-display); font-weight: 600; letter-spacing: 0.02em
+  Sub-labels: font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--color-primary); margin-bottom: 1rem  ← gold uppercase label above each heading
+  Body: font-weight: 300; line-height: 1.85; color: var(--color-text-muted)
+
+GOLD ACCENTS (use throughout):
+  Gold divider lines: <hr style="border:none;width:60px;height:1px;background:var(--color-primary);margin:1.5rem auto">
+  Gold section label above every heading
+  Gold border on hover for cards and buttons
+  Thin gold decorative border on hero: ::after pseudo-element inset 20px from edges
+
+SECTION BACKGROUNDS (classic alternation — muted and refined):
+  Features: background: var(--color-surface)  (warm cream)
+  About: background: var(--color-bg)
+  Gallery: background: var(--color-surface)
+  Pricing: background: var(--color-bg)
+  Testimonials: background: var(--gradient-section-dark); color: #e8d5b0  (gold-tinted white)
+  CTA: background: #1c2b3a; color: #faf9f6  (deep navy, not gradient)
+  Footer: background: #0f1824; color: #7a7265
+
+BUTTONS:
+  Primary: background: transparent; border: 1px solid var(--color-primary); color: var(--color-primary); border-radius: var(--radius-sm); padding: 0.9rem 2.5rem; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; font-weight: 500
+  Primary hover: background: var(--color-primary); color: #fff
+  On dark sections: border-color: rgba(201,169,110,0.6); color: rgba(201,169,110,0.8)
+
+SECTION SPACING:
+  Extra generous — section padding: clamp(120px, 14vw, 200px) 0
+  Max content width: 1000px (narrower for editorial feel)
+  Text blocks: max-width: 680px
+
+ANIMATIONS:
+  AOS: data-aos="fade-up" duration 900ms — very slow and graceful
+  Animate.css hero: animate__fadeIn ONLY (headline), animate__fadeIn + animate__delay-1s (sub)
+  No bouncy, no slide. Transitions: 400ms ease — refined and unhurried`,
+};
+
+export function getStylePrompt(style?: string | null): string {
+  if (!style) return "";
+  return STYLE_PROMPTS[style] ?? "";
+}
+
 function getOpenAIClient(): OpenAI {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY environment variable is required for code generation");
@@ -922,12 +1324,14 @@ export async function generateWithOpenAI(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   userMessage: string,
   projectType?: string | null,
-  tier: ModelTier = "power"
+  tier: ModelTier = "power",
+  style?: string | null
 ): Promise<GeneratedOutput> {
   const openai = getOpenAIClient();
   const model = MODELS[tier];
 
-  const fullSystemPrompt = SYSTEM_PROMPT + "\n\n" + getTypePrompt(projectType);
+  const styleBlock = getStylePrompt(style);
+  const fullSystemPrompt = SYSTEM_PROMPT + "\n\n" + getTypePrompt(projectType) + (styleBlock ? "\n\n" + styleBlock : "");
 
   const chatMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
     { role: "system", content: fullSystemPrompt },
@@ -978,12 +1382,14 @@ export async function* streamWithOpenAI(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   userMessage: string,
   projectType?: string | null,
-  tier: ModelTier = "power"
+  tier: ModelTier = "power",
+  style?: string | null
 ): AsyncGenerator<string> {
   const openai = getOpenAIClient();
   const model = MODELS[tier];
 
-  const fullSystemPrompt = SYSTEM_PROMPT + "\n\n" + getTypePrompt(projectType);
+  const styleBlock = getStylePrompt(style);
+  const fullSystemPrompt = SYSTEM_PROMPT + "\n\n" + getTypePrompt(projectType) + (styleBlock ? "\n\n" + styleBlock : "");
 
   const chatMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
     { role: "system", content: fullSystemPrompt },

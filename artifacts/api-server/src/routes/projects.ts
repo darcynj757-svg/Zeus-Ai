@@ -87,7 +87,7 @@ router.post("/projects", async (req, res): Promise<void> => {
   }
   const [project] = await db
     .insert(projectsTable)
-    .values({ name: parsed.data.name, projectType: parsed.data.projectType ?? "landing" })
+    .values({ name: parsed.data.name, projectType: parsed.data.projectType ?? "landing", style: parsed.data.style ?? null })
     .returning();
   res.status(201).json({ ...project, createdAt: project.createdAt.toISOString() });
 });
@@ -240,9 +240,15 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
   const wantsSSE = (req.headers.accept ?? "").includes("text/event-stream");
 
   const projectType = body.data.projectType ?? project.projectType ?? "landing";
+  const style = body.data.style ?? project.style ?? null;
   const tier = parseTier((req.body as Record<string, unknown>).tier);
 
-  req.log.info({ model: tier === "lite" ? "gpt-4o-mini" : "gpt-4o", tier }, "generate: model selected");
+  req.log.info({ model: tier === "lite" ? "gpt-4o-mini" : "gpt-4o", tier, style }, "generate: model selected");
+
+  // Save style to project if provided in this request
+  if (body.data.style && body.data.style !== project.style) {
+    await db.update(projectsTable).set({ style: body.data.style }).where(eq(projectsTable.id, params.data.id));
+  }
 
   if (!wantsSSE) {
     // --- Fallback: regular JSON response ---
@@ -252,7 +258,8 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
         history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
         userMessageContent,
         projectType,
-        tier
+        tier,
+        style
       );
     } catch (err) {
       req.log.error({ err }, "Code generation failed");
@@ -335,7 +342,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     }, 40);
 
     try {
-      for await (const chunk of streamWithOpenAI(historyMapped, userMessageContent, projectType, tier)) {
+      for await (const chunk of streamWithOpenAI(historyMapped, userMessageContent, projectType, tier, style)) {
         fullText += chunk;
         tokenBuffer += chunk;
       }
@@ -355,7 +362,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     } catch {
       // Retry with non-streaming fallback
       sendSSE(res, "status", { text: "Перезапускаю молнию (повторная попытка)..." });
-      generated = await generateWithOpenAI(historyMapped, userMessageContent, projectType, tier);
+      generated = await generateWithOpenAI(historyMapped, userMessageContent, projectType, tier, style);
     }
 
     // Emit file events

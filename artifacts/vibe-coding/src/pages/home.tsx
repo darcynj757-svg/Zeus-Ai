@@ -1073,10 +1073,11 @@ export default function Home() {
     if (projects.length === 0 && !createdRef.current) {
       createdRef.current = true;
       const savedType = sessionStorage.getItem("zeus_project_type") as "landing" | "app" | "shop" | "card" | "portfolio" | null;
+      const savedStyle = sessionStorage.getItem("zeus_project_style") as "minimal" | "bold" | "glass" | "dark" | "playful" | "elegant" | null;
       const typeLabels: Record<string, string> = { landing: "Лендинг", app: "Приложение", shop: "Магазин", card: "Визитка", portfolio: "Портфолио" };
       const projectName = savedType ? `${typeLabels[savedType] ?? "Проект"} ${Math.floor(Math.random() * 100)}` : "Моё приложение";
       createProject.mutate(
-        { data: { name: projectName, projectType: savedType ?? "landing" } },
+        { data: { name: projectName, projectType: savedType ?? "landing", style: savedStyle ?? undefined } },
         {
           onSuccess: (newProj) => {
             queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
@@ -1114,7 +1115,7 @@ export default function Home() {
             "Content-Type": "application/json",
             Accept: "text/event-stream",
           },
-          body: JSON.stringify({ message, tier }),
+          body: JSON.stringify({ message, tier, style: sessionStorage.getItem("zeus_project_style") || undefined }),
         });
 
         if (!response.ok) {

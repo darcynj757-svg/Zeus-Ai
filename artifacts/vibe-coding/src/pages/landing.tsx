@@ -5,6 +5,15 @@ import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 
 const NAV_LINKS = ["Шаблоны", "Тарифы", "Примеры", "Блог"];
 
+const STYLES: Array<{ id: string; label: string; emoji: string }> = [
+  { id: "minimal",  label: "Минимализм",  emoji: "○" },
+  { id: "bold",     label: "Смелый",      emoji: "◼" },
+  { id: "glass",    label: "Стекло",      emoji: "◇" },
+  { id: "dark",     label: "Тёмный",      emoji: "●" },
+  { id: "playful",  label: "Игривый",     emoji: "✿" },
+  { id: "elegant",  label: "Элегантный",  emoji: "✦" },
+];
+
 const TABS: Array<{ icon: string; label: string; type: "landing" | "app" | "shop" | "card" | "portfolio"; desc: string }> = [
   { icon: "🌐", label: "Сайт-лендинг",    type: "landing",   desc: "Многосекционный сайт: hero, преимущества, цены, отзывы, footer" },
   { icon: "⚡", label: "Приложение",       type: "app",       desc: "SPA на React с состоянием, localStorage и несколькими экранами" },
@@ -60,6 +69,7 @@ export default function Landing() {
   const [, navigate] = useLocation();
   const [themeMode, setThemeMode] = useState<ThemeMode>("monitor");
   const [activeTab, setActiveTab] = useState(0);
+  const [activeStyle, setActiveStyle] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -69,6 +79,11 @@ export default function Landing() {
     const p = (initialPrompt ?? prompt).trim();
     if (p) sessionStorage.setItem("zeus_initial_prompt", p);
     sessionStorage.setItem("zeus_project_type", TABS[activeTab].type);
+    if (activeStyle) {
+      sessionStorage.setItem("zeus_project_style", activeStyle);
+    } else {
+      sessionStorage.removeItem("zeus_project_style");
+    }
     navigate("/app");
   };
 
@@ -211,6 +226,26 @@ export default function Landing() {
                 >
                   <span className="text-sm leading-none">{tab.icon}</span>
                   {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* STYLE CHIPS — compact row below type tabs */}
+            <div className="flex items-center gap-1 px-3 pb-1 overflow-x-auto no-scrollbar">
+              <span className="text-[11px] text-white/25 shrink-0 pr-1">Стиль:</span>
+              {STYLES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveStyle(activeStyle === s.id ? null : s.id)}
+                  title={s.label}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[12px] whitespace-nowrap border transition-all duration-150 shrink-0 ${
+                    activeStyle === s.id
+                      ? "bg-violet-500/20 border-violet-400/40 text-violet-300"
+                      : "bg-transparent border-transparent text-white/30 hover:text-white/58 hover:bg-white/[0.05]"
+                  }`}
+                >
+                  <span className="text-[10px] leading-none">{s.emoji}</span>
+                  {s.label}
                 </button>
               ))}
             </div>

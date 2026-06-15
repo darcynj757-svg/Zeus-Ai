@@ -39,7 +39,8 @@ export const ListProjectsResponse = zod.array(ListProjectsResponseItem)
 
 export const CreateProjectBody = zod.object({
   "name": zod.string().min(1),
-  "projectType": zod.enum(["landing", "app", "shop", "card", "portfolio"]).optional().default("landing")
+  "projectType": zod.enum(["landing", "app", "shop", "card", "portfolio"]).optional().default("landing"),
+  "style": zod.enum(["minimal", "bold", "glass", "dark", "playful", "elegant"]).optional()
 })
 
 
@@ -114,7 +115,8 @@ export const GenerateCodeParams = zod.object({
 
 export const GenerateCodeBody = zod.object({
   "message": zod.string().min(1),
-  "projectType": zod.enum(["landing", "app", "shop", "card", "portfolio"]).optional()
+  "projectType": zod.enum(["landing", "app", "shop", "card", "portfolio"]).optional(),
+  "style": zod.enum(["minimal", "bold", "glass", "dark", "playful", "elegant"]).optional()
 })
 
 export const GenerateCodeResponse = zod.object({
