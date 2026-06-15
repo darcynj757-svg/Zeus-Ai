@@ -232,17 +232,18 @@ DESIGN SYSTEM  (apply to every project)
    • Section padding: padding: clamp(80px, 10vw, 120px) 0   ← generous vertical rhythm
    • Consistent horizontal gutters via gap / column-gap
 
-7. MOBILE-FIRST RESPONSIVE — 3 MANDATORY BREAKPOINTS:
+7. MOBILE-FIRST RESPONSIVE — 3 MANDATORY BREAKPOINTS + M1–M6 RULES:
+   • Viewport meta (mandatory): <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
    • Base styles target mobile (≤ 480 px): single-column, stacked layout
    • @media (min-width: 481px)  — large mobile / portrait tablet adjustments
    • @media (min-width: 768px)  — tablet: 2-column grids unlock, nav row
    • @media (min-width: 1024px) — desktop: full multi-column grids, max widths
    Rules: every multi-column grid/flex collapses to 1 column on mobile.
-   Font sizes/spacing MUST decrease on mobile (use the clamp() vars).
+   Font sizes/spacing MUST use clamp() (see M2). Card grids MUST use auto-fit (see M3).
    NO horizontal overflow (max-width:100%; overflow-x:hidden on body).
-   Touch targets ≥ 44 px.
+   Touch targets ≥ 44 px (see M6). Full mobile rules: see M1–M6 block below.
 
-8. BUTTONS:
+8. BUTTONS + TOUCH TARGETS:
    • Primary: background: var(--gradient-primary); color: #fff; border-radius: var(--radius-full);
      padding: 0.85rem 2rem; font-weight: 600; box-shadow: var(--shadow-md);
      hover: filter: brightness(1.08); box-shadow: var(--shadow-glow); transform: translateY(-2px);
@@ -250,6 +251,9 @@ DESIGN SYSTEM  (apply to every project)
    • Secondary: border: 2px solid var(--color-primary); color: var(--color-primary);
      hover: background: var(--color-primary); color: #fff;
    • Active press: transform: scale(0.97);
+   • ALL interactive elements (buttons, links, nav items): min-height: 44px; min-width: 44px;
+     Adjacent interactive zones: margin/gap ≥ 8px apart (no crowding on touch).
+   • ALL <input>, <textarea>, <select>: font-size: 16px !important; (prevents iOS auto-zoom)
 
 9. MICRO-INTERACTIONS:
    • Smooth hover/focus transitions on all interactive elements
@@ -363,6 +367,126 @@ R4. REDUCED MOTION — mandatory @media block
     AOS.init({ duration: prefersReduced ? 0 : 700, once: true, offset: 80 });
 
 ═══════════════════════════════════════
+MOBILE HARDENING  (M1–M6 — mandatory for EVERY project)
+═══════════════════════════════════════
+
+M1. SAFE-AREA (notch / home-bar support)
+────────────────────────────────────────────────────────
+• Viewport meta MUST include viewport-fit=cover:
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+• Reset margins:
+    html, body { margin: 0; padding: 0; }
+• Fixed/sticky elements MUST account for device notches and home bars:
+    /* sticky header */
+    header {
+      padding-top: max(var(--space-4), env(safe-area-inset-top));
+      padding-left: max(var(--space-4), env(safe-area-inset-left));
+      padding-right: max(var(--space-4), env(safe-area-inset-right));
+    }
+    /* sticky mobile CTA bar (M4) */
+    .sticky-cta {
+      padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+    }
+    /* footer */
+    footer {
+      padding-bottom: max(var(--space-8), env(safe-area-inset-bottom));
+    }
+
+M2. FLUID TYPOGRAPHY — clamp() everywhere (hard requirement)
+────────────────────────────────────────────────────────
+• ALL font sizes and large spacing values MUST use clamp() so they scale smoothly:
+    Hero headline:    font-size: clamp(2rem, 7vw, 5rem);
+    Section heading:  font-size: clamp(1.6rem, 4vw, 2.5rem);
+    Sub-heading:      font-size: clamp(1.2rem, 3vw, 1.75rem);
+    Body text:        font-size: clamp(1rem, 1.5vw, 1.125rem);
+    Section padding:  padding: clamp(60px, 10vw, 120px) clamp(1rem, 5vw, 4rem);
+• NEVER use fixed px for font-size on headings — always clamp().
+• The :root typography scale (--text-xs … --text-5xl) already uses clamp() — USE those vars.
+• Result: no font-size jumps between breakpoints; perfectly fluid across all screen widths.
+
+M3. FLUID GRIDS — auto-fit/auto-fill (hard requirement)
+────────────────────────────────────────────────────────
+• ALL card grids (features, products, portfolio items, testimonials, pricing) MUST use:
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+    gap: clamp(1rem, 3vw, 2rem);
+• This automatically collapses to 1 column on narrow screens — NO need for @media to restack.
+• Adjust the minmax minimum to match card content:
+    - Feature cards: min(100%, 260px)
+    - Product/shop cards: min(100%, 240px)
+    - Testimonial cards: min(100%, 300px)
+    - Pricing tiers: min(100%, 280px)
+• Gallery/photo grids: min(100%, 200px) with aspect-ratio: 4/3 on each cell.
+• DO NOT use fixed grid-template-columns: repeat(3, 1fr) — this breaks on mobile.
+
+M4. STICKY MOBILE CTA (shop and app types only)
+────────────────────────────────────────────────────────
+• For shop and app project types, add a fixed bottom action bar visible ONLY on mobile:
+    HTML (inside <body>, after <main>):
+    <div class="sticky-cta" role="complementary" aria-label="Быстрое действие">
+      <button class="btn-primary sticky-cta-btn">
+        <i data-lucide="shopping-cart" aria-hidden="true"></i>
+        <span>Добавить в корзину</span>
+      </button>
+    </div>
+    CSS:
+    .sticky-cta {
+      display: none; /* hidden on desktop */
+    }
+    @media (max-width: 767px) {
+      .sticky-cta {
+        display: flex;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        padding: var(--space-3) var(--space-4);
+        padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+        background: var(--color-bg);
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+        z-index: 900;
+        gap: var(--space-3);
+      }
+      .sticky-cta-btn { flex: 1; justify-content: center; }
+      /* Prevent content from hiding behind the sticky bar */
+      main { padding-bottom: 80px; }
+    }
+• Label/icon adapts to project type: shop → "Добавить в корзину" (shopping-cart icon);
+  app → "Начать бесплатно" (zap icon).
+
+M5. NO CLS ON MOBILE — aspect-ratio + hero height cap
+────────────────────────────────────────────────────────
+• Hero section on mobile: cap height so it never exceeds 70vh:
+    .hero {
+      min-height: 100vh;          /* desktop */
+    }
+    @media (max-width: 767px) {
+      .hero { min-height: min(100vh, 70vh); max-height: 70vh; overflow: hidden; }
+    }
+• ALL large images (section photos, gallery, card thumbs) MUST have aspect-ratio in CSS
+  to reserve space before the image loads (prevents layout shift):
+    /* Hero background img */
+    .hero img { aspect-ratio: 16/9; }
+    /* Section / feature photos */
+    .section-photo { aspect-ratio: 16/9; width: 100%; object-fit: cover; }
+    /* Card thumbnails */
+    .card-thumb { aspect-ratio: 4/3; width: 100%; object-fit: cover; }
+    /* Avatars */
+    .avatar { aspect-ratio: 1/1; }
+• Combined with the width+height attributes (R2), this eliminates CLS entirely.
+
+M6. TOUCH TARGETS + INPUT ZOOM PREVENTION
+────────────────────────────────────────────────────────
+• EVERY clickable/tappable element: min-height: 44px; min-width: 44px; (iOS/Android HIG)
+• Interactive elements that are inline (nav links, icon buttons): add padding to reach 44px:
+    nav a, .icon-btn { min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--space-2); }
+• Adjacent interactive zones MUST be ≥ 8px apart (gap or margin) — no accidental taps.
+• ALL form inputs, textareas, selects:
+    input, textarea, select {
+      font-size: 16px !important;  /* iOS won't zoom when font-size ≥ 16px */
+      min-height: 44px;
+    }
+• Checkboxes and radio buttons: wrap in a <label> with min-height: 44px; display: flex; align-items: center; gap: 8px;
+
+═══════════════════════════════════════
 QUALITY BAR
 ═══════════════════════════════════════
 Before finalising, mentally review each item — if any box is unchecked, fix it before outputting:
@@ -387,6 +511,12 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ [R3] FORM LABELS: every input/textarea has a <label> (visible or .sr-only)?
 □ [R3] ARIA-LABEL: every icon-only button/link has aria-label?
 □ [R4] REDUCED MOTION: @media (prefers-reduced-motion: reduce) block at end of style.css? AOS.init uses prefersReduced check?
+□ [M1] SAFE-AREA: viewport meta has viewport-fit=cover? html,body{margin:0}? header/footer/sticky-cta use env(safe-area-inset-*) with max()?
+□ [M2] FLUID TYPOGRAPHY: ALL heading font-sizes use clamp()? Section padding uses clamp()? No fixed-px headings?
+□ [M3] FLUID GRIDS: ALL card grids use repeat(auto-fit, minmax(min(100%, Xpx), 1fr))? No fixed repeat(N, 1fr) columns?
+□ [M4] STICKY CTA: for shop/app — .sticky-cta div present in HTML? Shown only on @media max-width:767px? Has safe-area bottom padding?
+□ [M5] NO CLS: hero capped at 70vh on mobile? ALL section/card images have aspect-ratio in CSS?
+□ [M6] TOUCH: ALL buttons/links min-height:44px? ALL inputs/textareas have font-size:16px? Adjacent targets ≥ 8px apart?
 □ Smooth scroll + navbar scroll effect implemented?
 □ VERTICAL RHYTHM: section padding ≥ 80px top/bottom (clamp to 120px)?
 □ Type scale clearly hierarchical (hero 48–80px, sections 28–40px, body 16–18px)?
