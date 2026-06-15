@@ -33,6 +33,37 @@ Allowed: fonts.googleapis.com, fonts.gstatic.com, unpkg.com, cdn.jsdelivr.net,
 NEVER use source.unsplash.com (deprecated, returns 503). NEVER use any other external domain for scripts, styles, fonts, or images.
 
 ═══════════════════════════════════════
+HTML BOILERPLATE  (non-negotiable — copy EXACTLY)
+═══════════════════════════════════════
+Every index.html MUST start with this EXACT <head> opening — do NOT alter these lines:
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>…brand name…</title>
+  <!-- PRECONNECT — before any external resource -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://images.unsplash.com">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://unpkg.com">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=…&display=swap" rel="stylesheet">
+  <!-- AOS + Animate.css -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+  <!-- Lucide icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+CRITICAL: The viewport meta line MUST be EXACTLY:
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+DO NOT omit viewport-fit=cover — it enables safe-area CSS env() on iOS notch devices.
+
+═══════════════════════════════════════
 IMAGES (mandatory — MINIMUM 5 real photos per page)
 ═══════════════════════════════════════
 TARGET: Every landing / shop page MUST contain ≥ 5 real photo <img> tags.
@@ -124,7 +155,32 @@ ANIMATIONS (AOS + Animate.css — mandatory)
 ═══════════════════════════════════════
 DESIGN SYSTEM  (apply to every project)
 ═══════════════════════════════════════
-1. CSS VARIABLES — always open style.css with a :root block defining ALL of these:
+1. MANDATORY CSS RESET — ALWAYS paste these EXACT lines at the very TOP of style.css (before :root):
+
+/* ── RESET (copy verbatim — do not omit) ── */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; overflow-x: hidden; }
+img, video { max-width: 100%; height: auto; }
+input, textarea, select { font-size: 16px; }           /* prevents iOS zoom */
+a, button, [role="button"], .btn, .btn-primary, .btn-secondary,
+nav a, .hamburger { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; }
+
+/* ── SAFE-AREA for sticky/fixed elements ── */
+header { padding-top: max(0.5rem, env(safe-area-inset-top)); padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); }
+footer { padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
+.sticky-cta, .mobile-cta { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+
+/* ── ASPECT-RATIO (prevents layout shift on mobile) ── */
+.hero-img-wrap, .hero > img { aspect-ratio: 16 / 9; }
+@media (max-width: 767px) { .hero { max-height: 70vh; overflow: hidden; } }
+.card-thumb, .product-img, .feature-img { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; display: block; }
+.gallery-item img, .portfolio-img { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; }
+.avatar, .testimonial-avatar { aspect-ratio: 1 / 1; }
+
+These reset lines are NON-NEGOTIABLE — every generated style.css MUST contain them word-for-word.
+
+2. CSS VARIABLES — always follow the reset with a :root block defining ALL of these:
 
    /* Colours */
    --color-bg: #ffffff;
@@ -452,26 +508,25 @@ M4. STICKY MOBILE CTA (shop and app types only)
 • Label/icon adapts to project type: shop → "Добавить в корзину" (shopping-cart icon);
   app → "Начать бесплатно" (zap icon).
 
-M5. NO CLS ON MOBILE — aspect-ratio + hero height cap
+M5. NO CLS ON MOBILE — aspect-ratio + hero height cap  ← ALREADY in the CSS RESET (rule 1)
 ────────────────────────────────────────────────────────
-• Hero section on mobile: cap height so it never exceeds 70vh:
-    .hero {
-      min-height: 100vh;          /* desktop */
-    }
-    @media (max-width: 767px) {
-      .hero { min-height: min(100vh, 70vh); max-height: 70vh; overflow: hidden; }
-    }
-• ALL large images (section photos, gallery, card thumbs) MUST have aspect-ratio in CSS
-  to reserve space before the image loads (prevents layout shift):
-    /* Hero background img */
-    .hero img { aspect-ratio: 16/9; }
-    /* Section / feature photos */
-    .section-photo { aspect-ratio: 16/9; width: 100%; object-fit: cover; }
-    /* Card thumbnails */
-    .card-thumb { aspect-ratio: 4/3; width: 100%; object-fit: cover; }
-    /* Avatars */
-    .avatar { aspect-ratio: 1/1; }
-• Combined with the width+height attributes (R2), this eliminates CLS entirely.
+The MANDATORY CSS RESET block (Design System rule 1) already contains the required lines.
+VERIFY they are present — do NOT remove them when writing style.css:
+
+    /* MUST BE IN style.css — CLS prevention */
+    .hero-img-wrap, .hero > img { aspect-ratio: 16 / 9; }
+    @media (max-width: 767px) { .hero { max-height: 70vh; overflow: hidden; } }
+    .card-thumb, .product-img, .feature-img { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; display: block; }
+    .gallery-item img, .portfolio-img { aspect-ratio: 4 / 3; width: 100%; object-fit: cover; }
+    .avatar, .testimonial-avatar { aspect-ratio: 1 / 1; }
+
+• Apply the class names above to your image containers:
+    - Hero background image wrapper → class="hero-img-wrap" (or apply directly to .hero > img)
+    - Card / product image container → class="card-thumb" or "product-img"
+    - Gallery images → class="gallery-item" wrapping the img
+    - Avatars → class="testimonial-avatar"
+• Still include width+height attributes on every <img> (R2) for double protection.
+• These aspect-ratio rules work WITH object-fit:cover to prevent CLS without distorting images.
 
 M6. TOUCH TARGETS + INPUT ZOOM PREVENTION
 ────────────────────────────────────────────────────────
@@ -511,12 +566,16 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ [R3] FORM LABELS: every input/textarea has a <label> (visible or .sr-only)?
 □ [R3] ARIA-LABEL: every icon-only button/link has aria-label?
 □ [R4] REDUCED MOTION: @media (prefers-reduced-motion: reduce) block at end of style.css? AOS.init uses prefersReduced check?
-□ [M1] SAFE-AREA: viewport meta has viewport-fit=cover? html,body{margin:0}? header/footer/sticky-cta use env(safe-area-inset-*) with max()?
+□ [M1] VIEWPORT META: index.html contains EXACTLY <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"> (with viewport-fit=cover)?
+□ [M1] SAFE-AREA CSS: style.css contains env(safe-area-inset-top) on header AND env(safe-area-inset-bottom) on footer / .sticky-cta?
 □ [M2] FLUID TYPOGRAPHY: ALL heading font-sizes use clamp()? Section padding uses clamp()? No fixed-px headings?
 □ [M3] FLUID GRIDS: ALL card grids use repeat(auto-fit, minmax(min(100%, Xpx), 1fr))? No fixed repeat(N, 1fr) columns?
-□ [M4] STICKY CTA: for shop/app — .sticky-cta div present in HTML? Shown only on @media max-width:767px? Has safe-area bottom padding?
-□ [M5] NO CLS: hero capped at 70vh on mobile? ALL section/card images have aspect-ratio in CSS?
-□ [M6] TOUCH: ALL buttons/links min-height:44px? ALL inputs/textareas have font-size:16px? Adjacent targets ≥ 8px apart?
+□ [M4] STICKY CTA: for shop/app — mobile-cta / sticky-cta element present in HTML? position:fixed bottom:0 in CSS? Shown only on ≤767px?
+□ [M5] ASPECT-RATIO: style.css contains aspect-ratio: 16/9 on hero img AND aspect-ratio: 4/3 on card/product images AND aspect-ratio: 1/1 on avatars?
+□ [M5] HERO CAP: @media (max-width: 767px) { .hero { max-height: 70vh } } present in CSS?
+□ [M6] TOUCH TARGETS: style.css contains min-height: 44px on buttons/links? (from CSS reset block)
+□ [M6] INPUT ZOOM: style.css contains font-size: 16px on input/textarea/select? (from CSS reset block)
+□ [CSS RESET] Does style.css START with the mandatory reset block (*, box-sizing:border-box; body margin:0; img max-width:100%; input font-size:16px; a/button min-height:44px; safe-area header/footer; aspect-ratio classes)?
 □ Smooth scroll + navbar scroll effect implemented?
 □ VERTICAL RHYTHM: section padding ≥ 80px top/bottom (clamp to 120px)?
 □ Type scale clearly hierarchical (hero 48–80px, sections 28–40px, body 16–18px)?
