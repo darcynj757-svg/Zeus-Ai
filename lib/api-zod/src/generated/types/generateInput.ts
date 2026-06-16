@@ -5,10 +5,10 @@
  * Vibe Coding Service API
  * OpenAPI spec version: 0.1.0
  */
+import type { GenerateInputProjectType } from './generateInputProjectType';
 
 export interface GenerateInput {
   /** @minLength 1 */
   message: string;
-  projectType?: 'landing' | 'app' | 'shop' | 'card' | 'portfolio';
-  style?: 'minimal' | 'bold' | 'glass' | 'dark' | 'playful' | 'elegant';
+  projectType?: GenerateInputProjectType;
 }

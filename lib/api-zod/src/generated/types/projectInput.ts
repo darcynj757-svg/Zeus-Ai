@@ -5,10 +5,12 @@
  * Vibe Coding Service API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProjectInputProjectType } from './projectInputProjectType';
+import type { ProjectInputStyle } from './projectInputStyle';
 
 export interface ProjectInput {
   /** @minLength 1 */
   name: string;
-  projectType?: 'landing' | 'app' | 'shop' | 'card' | 'portfolio';
-  style?: 'minimal' | 'bold' | 'glass' | 'dark' | 'playful' | 'elegant';
+  projectType?: ProjectInputProjectType;
+  style?: ProjectInputStyle;
 }

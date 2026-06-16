@@ -23,10 +23,11 @@ export const HealthCheckResponse = zod.object({
 export const ListProjectsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "projectType": zod.string().optional(),
   "sandboxId": zod.string().nullish(),
   "previewUrl": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "projectType": zod.union([zod.literal('landing'),zod.literal('app'),zod.literal('shop'),zod.literal('card'),zod.literal('portfolio'),zod.literal('presentation'),zod.literal(null)]).nullish(),
+  "style": zod.string().nullish()
 })
 export const ListProjectsResponse = zod.array(ListProjectsResponseItem)
 
@@ -35,12 +36,12 @@ export const ListProjectsResponse = zod.array(ListProjectsResponseItem)
  * @summary Create a new project
  */
 
-
+export const createProjectBodyProjectTypeDefault = `landing`;
 
 export const CreateProjectBody = zod.object({
   "name": zod.string().min(1),
-  "projectType": zod.enum(["landing", "app", "shop", "card", "portfolio"]).optional().default("landing"),
-  "style": zod.enum(["minimal", "bold", "glass", "dark", "playful", "elegant"]).optional()
+  "projectType": zod.enum(['landing', 'app', 'shop', 'card', 'portfolio', 'presentation']).default(createProjectBodyProjectTypeDefault),
+  "style": zod.enum(['minimal', 'bold', 'glass', 'dark', 'playful', 'elegant']).optional()
 })
 
 
@@ -54,10 +55,11 @@ export const GetProjectParams = zod.object({
 export const GetProjectResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
-  "projectType": zod.string().optional(),
   "sandboxId": zod.string().nullish(),
   "previewUrl": zod.string().nullish(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "projectType": zod.union([zod.literal('landing'),zod.literal('app'),zod.literal('shop'),zod.literal('card'),zod.literal('portfolio'),zod.literal('presentation'),zod.literal(null)]).nullish(),
+  "style": zod.string().nullish()
 })
 
 
@@ -111,12 +113,11 @@ export const GenerateCodeParams = zod.object({
 })
 
 
-
+export const generateCodeBodyProjectTypeDefault = `landing`;
 
 export const GenerateCodeBody = zod.object({
   "message": zod.string().min(1),
-  "projectType": zod.enum(["landing", "app", "shop", "card", "portfolio"]).optional(),
-  "style": zod.enum(["minimal", "bold", "glass", "dark", "playful", "elegant"]).optional()
+  "projectType": zod.enum(['landing', 'app', 'shop', 'card', 'portfolio', 'presentation']).default(generateCodeBodyProjectTypeDefault)
 })
 
 export const GenerateCodeResponse = zod.object({

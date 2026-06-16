@@ -213,6 +213,11 @@ components:
           type: ["string", "null"]
         createdAt:
           type: string
+        projectType:
+          type: ["string", "null"]
+          enum: [landing, app, shop, card, portfolio, presentation, null]
+        style:
+          type: ["string", "null"]
 
     ProjectInput:
       type: object
@@ -221,6 +226,13 @@ components:
         name:
           type: string
           minLength: 1
+        projectType:
+          type: string
+          enum: [landing, app, shop, card, portfolio, presentation]
+          default: landing
+        style:
+          type: string
+          enum: [minimal, bold, glass, dark, playful, elegant]
 
     Message:
       type: object
@@ -259,6 +271,10 @@ components:
         message:
           type: string
           minLength: 1
+        projectType:
+          type: string
+          enum: [landing, app, shop, card, portfolio, presentation]
+          default: landing
 
     GenerateResult:
       type: object

@@ -7,10 +7,14 @@
  */
 
 export * from './generateInput';
+export * from './generateInputProjectType';
 export * from './generateResult';
 export * from './healthStatus';
 export * from './message';
 export * from './project';
 export * from './projectFile';
 export * from './projectInput';
+export * from './projectInputProjectType';
+export * from './projectInputStyle';
+export * from './projectProjectType';
 export * from './sandboxStatus';

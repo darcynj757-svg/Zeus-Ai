@@ -5,14 +5,18 @@
  * Vibe Coding Service API
  * OpenAPI spec version: 0.1.0
  */
+import type { ProjectProjectType } from './projectProjectType';
 
 export interface Project {
   id: number;
   name: string;
-  projectType?: string;
   /** @nullable */
   sandboxId?: string | null;
   /** @nullable */
   previewUrl?: string | null;
   createdAt: string;
+  /** @nullable */
+  projectType?: ProjectProjectType;
+  /** @nullable */
+  style?: string | null;
 }

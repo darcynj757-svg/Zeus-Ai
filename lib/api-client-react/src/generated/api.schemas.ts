@@ -9,6 +9,21 @@ export interface HealthStatus {
   status: string;
 }
 
+/**
+ * @nullable
+ */
+export type ProjectProjectType = typeof ProjectProjectType[keyof typeof ProjectProjectType] | null;
+
+
+export const ProjectProjectType = {
+  landing: 'landing',
+  app: 'app',
+  shop: 'shop',
+  card: 'card',
+  portfolio: 'portfolio',
+  presentation: 'presentation',
+} as const;
+
 export interface Project {
   id: number;
   name: string;
@@ -17,11 +32,41 @@ export interface Project {
   /** @nullable */
   previewUrl?: string | null;
   createdAt: string;
+  /** @nullable */
+  projectType?: ProjectProjectType;
+  /** @nullable */
+  style?: string | null;
 }
+
+export type ProjectInputProjectType = typeof ProjectInputProjectType[keyof typeof ProjectInputProjectType];
+
+
+export const ProjectInputProjectType = {
+  landing: 'landing',
+  app: 'app',
+  shop: 'shop',
+  card: 'card',
+  portfolio: 'portfolio',
+  presentation: 'presentation',
+} as const;
+
+export type ProjectInputStyle = typeof ProjectInputStyle[keyof typeof ProjectInputStyle];
+
+
+export const ProjectInputStyle = {
+  minimal: 'minimal',
+  bold: 'bold',
+  glass: 'glass',
+  dark: 'dark',
+  playful: 'playful',
+  elegant: 'elegant',
+} as const;
 
 export interface ProjectInput {
   /** @minLength 1 */
   name: string;
+  projectType?: ProjectInputProjectType;
+  style?: ProjectInputStyle;
 }
 
 export interface Message {
@@ -40,9 +85,22 @@ export interface ProjectFile {
   updatedAt: string;
 }
 
+export type GenerateInputProjectType = typeof GenerateInputProjectType[keyof typeof GenerateInputProjectType];
+
+
+export const GenerateInputProjectType = {
+  landing: 'landing',
+  app: 'app',
+  shop: 'shop',
+  card: 'card',
+  portfolio: 'portfolio',
+  presentation: 'presentation',
+} as const;
+
 export interface GenerateInput {
   /** @minLength 1 */
   message: string;
+  projectType?: GenerateInputProjectType;
 }
 
 export interface GenerateResult {
