@@ -502,7 +502,8 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 | ea1b1d7 | Add safeguards to ensure navigation displays correctly on all screen sizes |
 | 4ed05ba | Add a script fallback to ensure website interactivity |
 | bc86317 | Add sanitizeContent guard + CONTENT RULES for production-ready output (Этап 5, шаги 1–3) |
-| (pending) | Этап 5: presentation TYPE_PROMPTS (шаг 4) + E2E readiness (шаг 5) |
+| cfa3d30 | Add presentation (slide-deck) project type (Этап 5, шаг 4) |
+| (pending) | Этап 5: E2E readiness test (шаг 5) |
 
 ### ТОЧКА ВХОДА ДЛЯ СЛЕДУЮЩЕЙ СЕССИИ (обновлено)
 
@@ -513,8 +514,7 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 1. [x] CONTENT RULES в SYSTEM_PROMPT (QUALITY BAR): запрет placeholder-филлера + требование ≥3 секций. (commit bc86317)
 2. [x] sanitizeContent(files) — outermost guard в обоих ветках parseGeneratedOutput. Стрипает филлер (Lorem ipsum/TODO/[stub]), логирует тонкие страницы. Идемпотентна, zero-token, не бросает. (commit bc86317)
 3. [x] Unit-тесты sanitizeContent.test.ts — 7 assertions, все зелёные; полный suite 5/5. (commit bc86317)
-   ▸ NEXT: шаг 4 ниже.
-4. Добавить TYPE_PROMPTS для presentation (слайд-дек) — отдельный шаг.
-5. Прогнать E2E готовности на новом проекте, зафиксировать результаты таблицей.
+4. [x] presentation (слайд-дек): TYPE_PROMPTS.presentation в openai.ts (адаптивные слайды mobile+ПК, навигация клавиатура/свайп/скролл, ≥5 слайдов) + вкладка в landing.tsx/home.tsx. (commit cfa3d30)
+5. ▸ NEXT: Прогнать E2E готовности на новом проекте (вкл. presentation), зафиксировать результаты таблицей.
 
 **Инвариант (не менять):** цепочка sanitizers идемпотентна, нулевого-токен, не ломает строгий JSON { files, message }. sanitizeContent не должна выбрасывать исключение — только помечать или чинить.
