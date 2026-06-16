@@ -1960,9 +1960,54 @@ function fixViewportMeta(html: string): string {
   return html; // can't determine where to inject — leave unchanged
 }
 
+const MOBILE_480_MARKER = "/* zeus:mobile-480 */";
+// Extra-small phones (<= 480px): iPhone SE 375px, budget Android. Collapses grids,
+// shrinks type/padding, makes CTAs full-width. Marker-guarded for idempotency; zero-token.
+const MOBILE_480_FALLBACK = `
+${MOBILE_480_MARKER}
+@media (max-width: 480px) {
+  .features-grid, .services-grid, .products-grid,
+  .testimonials-grid, .pricing-grid, .gallery-grid,
+  .grid, [class*="grid-"], [class*="-grid"] {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+  section, .section { padding: 1.75rem 1rem !important; }
+  .hero h1, .hero .hero-title { font-size: clamp(1.5rem, 7vw, 2.2rem) !important; }
+  .hero p, .hero .hero-sub { font-size: clamp(0.9rem, 3.5vw, 1.05rem) !important; }
+  .btn, .btn-primary, .btn-secondary, .cta-btn { width: 100% !important; }
+  .container, .wrapper { padding-left: 1rem !important; padding-right: 1rem !important; }
+}`;
+
+const GRID_COLLAPSE_MARKER = "/* zeus:grid-collapse */";
+// Guarantees multi-column grids fold to one column on phones even when the model
+// already shipped its own @media (max-width:) block without a grid rule. Marker-guarded.
+const GRID_COLLAPSE_FALLBACK = `
+${GRID_COLLAPSE_MARKER}
+@media (max-width: 768px) {
+  .features-grid, .services-grid, .products-grid,
+  .testimonials-grid, .pricing-grid, .gallery-grid,
+  .grid, [class*="grid-"], [class*="-grid"] {
+    grid-template-columns: 1fr !important;
+  }
+}`;
+
 function fixMobileCss(css: string): string {
-  if (/@media\s*\(\s*max-width\s*:/i.test(css)) return css; // already present — idempotent
-  return css + MOBILE_CSS_FALLBACK;
+  let out = css;
+  const hasMq = /@media\s*\(\s*max-width\s*:/i.test(out);
+  if (!hasMq) {
+    // No max-width media query at all -> append the full 768px fallback (which already
+    // collapses grids to 1fr), and stamp the grid-collapse marker so re-runs are no-ops.
+    out += MOBILE_CSS_FALLBACK + "\n" + GRID_COLLAPSE_MARKER + "\n";
+  } else if (!out.includes(GRID_COLLAPSE_MARKER)) {
+    // A media query exists but grid collapse to 1fr is not guaranteed -> add a guarded one.
+    out += GRID_COLLAPSE_FALLBACK;
+  }
+  // Always guarantee an extra-small (<= 480px) block for tiny phones.
+  if (!out.includes(MOBILE_480_MARKER)) {
+    out += MOBILE_480_FALLBACK;
+  }
+  return out;
 }
 
 export function sanitizeMobile(
