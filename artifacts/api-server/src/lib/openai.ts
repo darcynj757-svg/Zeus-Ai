@@ -372,6 +372,12 @@ Always implement ALL that apply to the project type:
 - Accordion/FAQ: .accordion-btn click → toggle .open on parent item, animate max-height
 - For shop type: full cart (add/remove/qty/total) via localStorage, live badge, sidebar open/close
 
+[SCRIPTS] script.js MUST always be delivered, non-empty, and contain ALL THREE of:
+  (a) Hamburger toggle — click on .hamburger / .menu-toggle toggles class .open and .active on .nav-links / nav
+  (b) Smooth scroll — a[href^="#"] clicks call scrollIntoView({ behavior: 'smooth' })
+  (c) AOS.init({ once: true }) called inside DOMContentLoaded (unconditional)
+  A missing or empty script.js = broken mobile nav, broken scroll, broken animations. Never omit it.
+
 ═══════════════════════════════════════
 CONTENT  (apply to every project)
 ═══════════════════════════════════════
@@ -2245,6 +2251,96 @@ export function sanitizeNavbar(
 
 // ─── END NAVBAR POST-PROCESSING ───────────────────────────────────────────────
 
+// ─── SCRIPTS POST-PROCESSING ─────────────────────────────────────────────────
+// Deterministic, zero-token, idempotent fallback for missing or empty script.js.
+
+const SCRIPTS_FALLBACK = `document.addEventListener('DOMContentLoaded', function () {
+  // Hamburger / mobile menu toggle
+  var hamburger = document.querySelector('.hamburger, .menu-toggle');
+  var navLinks = document.querySelector('.nav-links, nav');
+  if (hamburger && navLinks) {
+    hamburger.addEventListener('click', function () {
+      navLinks.classList.toggle('open');
+      navLinks.classList.toggle('active');
+    });
+  }
+
+  // Smooth scroll for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      var id = a.getAttribute('href');
+      if (!id || id === '#') return;
+      var target = document.querySelector(id);
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  });
+
+  // AOS — only if loaded
+  if (window.AOS) { AOS.init({ once: true }); }
+});
+`;
+
+const SCRIPT_TAG = '<script src="script.js" defer></script>';
+const SCRIPT_TAG_RE = /<script\s[^>]*src=["']script\.js["'][^>]*>/i;
+
+/** Returns true when the JS content has a meaningful hamburger toggle or DOMContentLoaded handler. */
+function hasWorkingScript(content: string): boolean {
+  const c = content.trim();
+  if (!c) return false;
+  return c.includes('hamburger') || c.includes('DOMContentLoaded');
+}
+
+export function sanitizeScripts(
+  files: Array<{ path: string; content: string }>
+): Array<{ path: string; content: string }> {
+  const scriptFile = files.find((f) => f.path === 'script.js');
+
+  if (scriptFile && hasWorkingScript(scriptFile.content)) {
+    // Already has a working script — idempotent, nothing to do
+    return files;
+  }
+
+  const reason = scriptFile
+    ? 'script.js was empty or lacked hamburger toggle / DOMContentLoaded — replaced with fallback'
+    : 'script.js was missing — injected fallback and added <script> tag to index.html';
+  console.warn(`[sanitizeScripts] ${reason}`);
+
+  let result = files.map((f) => f);
+
+  // Ensure script.js exists with fallback content
+  if (!scriptFile) {
+    result = [...result, { path: 'script.js', content: SCRIPTS_FALLBACK }];
+  } else {
+    result = result.map((f) =>
+      f.path === 'script.js' ? { ...f, content: SCRIPTS_FALLBACK } : f
+    );
+  }
+
+  // Ensure <script src="script.js" defer></script> appears before </body> in index.html
+  result = result.map((f) => {
+    if (f.path !== 'index.html') return f;
+    if (SCRIPT_TAG_RE.test(f.content)) return f; // already present — idempotent
+    const bodyCloseIdx = f.content.lastIndexOf('</body>');
+    if (bodyCloseIdx === -1) {
+      return { ...f, content: f.content + '\n' + SCRIPT_TAG };
+    }
+    return {
+      ...f,
+      content:
+        f.content.slice(0, bodyCloseIdx) +
+        SCRIPT_TAG + '\n' +
+        f.content.slice(bodyCloseIdx),
+    };
+  });
+
+  return result;
+}
+
+// ─── END SCRIPTS POST-PROCESSING ──────────────────────────────────────────────
+
 function recoverPartialFiles(raw: string): Array<{ path: string; content: string }> | null {
   const filesIdx = raw.indexOf('"files"');
   if (filesIdx === -1) return null;
@@ -2307,12 +2403,12 @@ export function parseGeneratedOutput(raw: string): GeneratedOutput {
     if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
       throw new Error("Invalid JSON structure from OpenAI");
     }
-    return { ...parsed, files: sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(parsed.files))))) };
+    return { ...parsed, files: sanitizeScripts(sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(parsed.files)))))) };
   } catch {
     const recoveredFiles = recoverPartialFiles(cleaned);
     if (recoveredFiles && recoveredFiles.length > 0) {
       return {
-        files: sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(recoveredFiles))))),
+        files: sanitizeScripts(sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(recoveredFiles)))))),
         message: "Сайт сгенерирован (восстановлен из обрезанного ответа)",
       };
     }
