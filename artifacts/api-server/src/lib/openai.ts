@@ -49,8 +49,11 @@ Every index.html MUST start with this EXACT <head> opening — do NOT alter thes
   <link rel="preconnect" href="https://images.unsplash.com">
   <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <link rel="preconnect" href="https://unpkg.com">
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=…&display=swap" rel="stylesheet">
+  <!-- Google Fonts — ONE <link> PER FONT FAMILY (use two separate tags if display ≠ body font) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DisplayFontName:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BodyFontName:wght@300;400;500;600;700&display=swap">
+  <!-- Replace DisplayFontName and BodyFontName with your chosen families (spaces → +, e.g. Playfair+Display) -->
+  <!-- If both fonts are the SAME family, use ONE combined <link>. NEVER omit a <link> for a font you declare in :root -->
   <!-- AOS + Animate.css -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
@@ -252,6 +255,13 @@ These reset lines are NON-NEGOTIABLE — every generated style.css MUST contain 
      ✅ CORRECT: family=Playfair+Display in <link> AND --font-display: 'Playfair Display', Georgia, serif
      ❌ WRONG: family=DM+Sans in <link> but body uses font-family: var(--font-sans) that references 'Inter' → wrong font
      ✅ CORRECT: family=DM+Sans in <link> AND --font-body: 'DM Sans', system-ui, sans-serif AND body { font-family: var(--font-body) }
+   • ONE <link> PER FONT FAMILY (non-negotiable):
+     - If --font-display is 'Playfair Display' and --font-body is 'Inter', you MUST have TWO separate <link> tags —
+       one for Playfair Display AND one for Inter. (Or combine into one URL with &family=… for each family.)
+     - ❌ WRONG: declaring --font-display: 'Playfair Display' but only loading Inter in <link> → Playfair falls back to serif
+     - ✅ CORRECT: <link …family=Playfair+Display:…> AND <link …family=Inter:wght@300;400;500;600;700&display=swap>
+     - After writing your <link> tags, check: does EVERY first-quoted family name in --font-display and --font-body
+       appear in a family= parameter of some <link> in <head>? If not — add the missing <link>.
    • MANDATORY :root variables — BOTH must be present:
        --font-display: '<ExactGoogleFontName>', Georgia, 'Times New Roman', serif;   /* display/heading */
        --font-body:    '<ExactGoogleFontName>', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; /* body */
@@ -337,7 +347,14 @@ These reset lines are NON-NEGOTIABLE — every generated style.css MUST contain 
    • Smooth hover/focus transitions on all interactive elements
    • Card hover: translateY(-6px) + box-shadow upgrade (see CARD ELEVATION SYSTEM)
    • Every transition uses a CSS variable duration
-   • Navbar: sticky, backdrop-filter: blur(12px), transparent→scrolled (bg + shadow) on scroll
+   • Navbar: sticky, backdrop-filter: blur(12px), transparent→scrolled (bg + shadow) on scroll.
+     CONTRAST — CRITICAL: In the INITIAL (not-scrolled) state the navbar is transparent over the dark hero photo.
+     Nav links using color: var(--color-text) (dark) become INVISIBLE against the dark image. Fix with ONE of:
+       (a) Set color: #fff on .nav-links a and .logo in the default (non-.scrolled) CSS rule, OR
+       (b) Apply a subtle dark-to-transparent gradient underlay on the initial navbar:
+             background: linear-gradient(180deg, rgba(0,0,0,0.40) 0%, transparent 100%);
+     NEVER rely solely on the .scrolled class for readability — the user sees the navbar BEFORE scrolling.
+     The CTA button in the header must also be visible: use outline-white or gradient style that works on dark bg.
 
 ═══════════════════════════════════════
 INTERACTIVITY (vanilla JS in script.js — mandatory)
@@ -430,15 +447,26 @@ R1. RESPONSIVE — 3 REAL BREAKPOINTS (hard requirement)
       /* SECTIONS: tighter vertical padding on mobile */
       section, .section { padding: clamp(2.5rem, 8vw, 4rem) var(--space-4) !important; }
 
-      /* BUTTONS: full-width on mobile */
+      /* BUTTONS: full-width on mobile (content buttons, NOT header nav buttons) */
       .btn, .btn-primary, .btn-secondary, .cta-btn {
         width: 100%;
         justify-content: center;
         text-align: center;
       }
+      /* EXCEPTION: buttons inside header/navbar stay auto-width */
+      header .btn, header .btn-primary, header .btn-secondary,
+      .navbar .btn, .navbar .btn-primary, .navbar .btn-secondary,
+      .nav-cta, .header-cta { width: auto !important; }
 
-      /* FLEX ROWS: stack vertically */
-      .flex-row, .row, [class*="flex-row"], header nav,
+      /* HEADER stays horizontal: logo left, hamburger / CTA right */
+      header, .navbar, .site-header, nav.navbar {
+        flex-direction: row !important;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      /* FLEX ROWS: stack vertically (never header — see rule above) */
+      .flex-row, .row, [class*="flex-row"],
       .about-inner, .cta-inner, .contact-inner {
         flex-direction: column !important;
       }
@@ -678,6 +706,9 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ Type scale clearly hierarchical (hero 48–80px, sections 28–40px, body 16–18px)?
 □ All copy specific and meaningful (zero placeholders)?
 □ Colour palette cohesive and brand-appropriate?
+□ [FONTS] Every font declared in --font-display AND --font-body has its own Google Fonts <link> in <head>? (Count your font variables; count your <link> tags. Every unique family = one <link>.)
+□ [NAVBAR CONTRAST] Navbar in its INITIAL (not-scrolled) state: are nav links and logo visible against the dark hero? Either color:#fff on .nav-links a in the base rule OR linear-gradient(rgba(0,0,0,0.40), transparent) as initial background?
+□ [MOBILE HEADER] On mobile: header stays flex-direction:row (logo left, hamburger right)? Nav CTA button has width:auto (NOT width:100%)? These must be explicit exceptions in the @media (max-width:768px) block.
 
 Aim for the output to look like a premium agency landing page — not a template, not a tutorial exercise.`;
 
@@ -1854,6 +1885,11 @@ const MOBILE_CSS_FALLBACK = `
   .btn, .btn-primary, .btn-secondary, .cta-btn {
     width: 100%; justify-content: center;
   }
+  /* Header stays horizontal; its buttons stay auto-width */
+  header, .navbar, .site-header { flex-direction: row !important; justify-content: space-between; align-items: center; }
+  header .btn, header .btn-primary, header .btn-secondary,
+  .navbar .btn, .navbar .btn-primary, .navbar .btn-secondary,
+  .nav-cta, .header-cta { width: auto !important; }
   section, .section { padding: 2.5rem 1rem !important; }
   .hero h1, .hero .hero-title { font-size: clamp(1.8rem, 7vw, 2.8rem) !important; }
   .hero p,  .hero .hero-sub   { font-size: clamp(0.95rem, 3vw, 1.2rem) !important; }
@@ -2015,6 +2051,166 @@ export function sanitizeImages(
 
 // ─── END IMAGE POST-PROCESSING ───────────────────────────────────────────────
 
+// ─── FONT POST-PROCESSING ─────────────────────────────────────────────────────
+// Deterministic, zero-token, idempotent fix: ensures every CSS font variable
+// (--font-display, --font-body, etc.) declared in :root of style.css has a
+// corresponding Google Fonts <link> in index.html.
+// Reads CSS, reads HTML, injects only missing <link> tags. No network calls.
+
+/** Extract the first quoted font family name from a CSS font-stack value string */
+function extractFontFamilyName(value: string): string | null {
+  const quoted = /['"]([^'"]+)['"]/i.exec(value);
+  if (quoted?.[1]) return quoted[1].trim();
+  const unquoted = value.split(",")[0]?.trim() ?? "";
+  const genericFamilies = /^(serif|sans-serif|monospace|cursive|fantasy|inherit|initial|unset|system-ui|-apple-system)$/i;
+  if (unquoted && !genericFamilies.test(unquoted)) return unquoted;
+  return null;
+}
+
+/** Build a Google Fonts stylesheet URL for a given family name */
+function buildGoogleFontsUrl(familyName: string): string {
+  const encoded = familyName.replace(/ /g, "+");
+  return `https://fonts.googleapis.com/css2?family=${encoded}:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap`;
+}
+
+/** Return true if an existing Google Fonts URL covers the given family */
+function googleFontsUrlCoversFamily(url: string, familyName: string): boolean {
+  const needle = familyName.replace(/ /g, "+").toLowerCase();
+  const hay   = url.toLowerCase().replace(/%20/g, "+");
+  // Match family=Name: or family=Name& or family=Name at end-of-string
+  return /family=/.test(hay) && new RegExp(`family=${needle.replace(/\+/g, "\\+")}(?:[:%&]|$)`).test(hay);
+}
+
+export function sanitizeFonts(
+  files: Array<{ path: string; content: string }>
+): Array<{ path: string; content: string }> {
+  const cssFile  = files.find(f => f.path === "style.css");
+  const htmlFile = files.find(f => f.path === "index.html");
+  if (!cssFile || !htmlFile) return files;
+
+  // 1. Parse --font-* variables from :root block in CSS
+  const rootM = /:root\s*\{([^}]*)\}/s.exec(cssFile.content);
+  if (!rootM) return files;
+  const fontVarRe = /--font-[\w-]+\s*:\s*([^;]+);/gi;
+  const fontNames = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = fontVarRe.exec(rootM[1])) !== null) {
+    const name = extractFontFamilyName(m[1]);
+    if (name) fontNames.add(name);
+  }
+  if (fontNames.size === 0) return files;
+
+  // 2. Parse existing Google Fonts <link> URLs from HTML
+  const GF_LINK_RE = /href\s*=\s*["']([^"']*fonts\.googleapis\.com\/css2?[^"']*)["']/gi;
+  const existingUrls: string[] = [];
+  let lm: RegExpExecArray | null;
+  while ((lm = GF_LINK_RE.exec(htmlFile.content)) !== null) existingUrls.push(lm[1]);
+
+  // 3. Find which font names are not covered by any existing URL
+  const missing = [...fontNames].filter(
+    name => !existingUrls.some(url => googleFontsUrlCoversFamily(url, name))
+  );
+  if (missing.length === 0) return files;
+
+  // 4. Inject <link> tags for missing fonts right after the last GF link (or before </head>)
+  const newLinks = missing
+    .map(name => `  <link rel="stylesheet" href="${buildGoogleFontsUrl(name)}">`)
+    .join("\n");
+
+  let injected = htmlFile.content;
+  const lastGfIdx = injected.lastIndexOf("fonts.googleapis.com");
+  if (lastGfIdx !== -1) {
+    const tagEnd = injected.indexOf(">", lastGfIdx);
+    injected = tagEnd !== -1
+      ? injected.slice(0, tagEnd + 1) + "\n" + newLinks + injected.slice(tagEnd + 1)
+      : injected.replace("</head>", newLinks + "\n</head>");
+  } else {
+    injected = injected.replace("</head>", newLinks + "\n</head>");
+  }
+
+  console.warn(`[sanitizeFonts] Injected Google Fonts <link> for missing font(s): ${missing.join(", ")}`);
+  return files.map(f => f.path === "index.html" ? { ...f, content: injected } : f);
+}
+
+// ─── END FONT POST-PROCESSING ─────────────────────────────────────────────────
+
+// ─── NAVBAR POST-PROCESSING ───────────────────────────────────────────────────
+// Two deterministic, zero-token, idempotent guards injected into style.css:
+//   1. Contrast guard: when navbar is transparent over dark hero, initial-state
+//      nav links become invisible. Inject a :not(.scrolled) color:#fff rule.
+//   2. Mobile layout guard: ensure header stays flex-row on mobile and nav CTA
+//      buttons don't inherit the global width:100% rule.
+// Both guards are idempotent (marker comment prevents double-injection).
+
+const NAVBAR_CONTRAST_GUARD = `
+/* ── Navbar contrast guard (auto-injected) ─────────────────────────────────── */
+/* Ensures nav links/logo are readable in the transparent pre-scroll state over dark hero */
+header:not(.scrolled) .nav-links a,
+header:not(.scrolled) .nav-link,
+.navbar:not(.scrolled) .nav-links a,
+.navbar:not(.scrolled) .nav-link { color: #ffffff !important; }
+header:not(.scrolled) .logo,
+header:not(.scrolled) .nav-brand,
+.navbar:not(.scrolled) .logo,
+.navbar:not(.scrolled) .nav-brand { color: #ffffff !important; }
+`;
+
+const NAVBAR_MOBILE_GUARD = `
+/* ── Mobile nav safety (auto-injected) ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Header stays horizontal: logo left, hamburger / CTA right */
+  header, .navbar, .site-header, nav.navbar {
+    flex-direction: row !important;
+    justify-content: space-between;
+    align-items: center;
+  }
+  /* Nav CTA button stays auto-width (overrides the global width:100% rule) */
+  header .btn, header .btn-primary, header .btn-secondary,
+  .navbar .btn, .navbar .btn-primary, .navbar .btn-secondary,
+  .nav-cta, .header-cta { width: auto !important; min-width: 0 !important; }
+}
+`;
+
+export function sanitizeNavbar(
+  files: Array<{ path: string; content: string }>
+): Array<{ path: string; content: string }> {
+  let cssChanged = false;
+
+  const result = files.map((file) => {
+    if (file.path !== "style.css") return file;
+    let css = file.content;
+    let fileChanged = false;
+
+    // 1. Contrast guard — only inject when navbar appears to be transparent
+    if (!css.includes("Navbar contrast guard") && !css.includes(":not(.scrolled) .nav-links")) {
+      const hasTransparentNavbar =
+        /\.navbar\s*\{[^}]*background\s*:\s*(?:transparent|none)/s.test(css) ||
+        /header\s*\{[^}]*background\s*:\s*(?:transparent|none)/s.test(css) ||
+        /backdrop-filter\s*:/i.test(css);
+      if (hasTransparentNavbar) {
+        css += NAVBAR_CONTRAST_GUARD;
+        fileChanged = true;
+      }
+    }
+
+    // 2. Mobile nav guard — always inject if marker is absent
+    if (!css.includes("Mobile nav safety")) {
+      css += NAVBAR_MOBILE_GUARD;
+      fileChanged = true;
+    }
+
+    if (fileChanged) { cssChanged = true; return { ...file, content: css }; }
+    return file;
+  });
+
+  if (cssChanged) {
+    console.warn("[sanitizeNavbar] Injected navbar contrast/mobile-nav safety rules into style.css");
+  }
+  return result;
+}
+
+// ─── END NAVBAR POST-PROCESSING ───────────────────────────────────────────────
+
 function recoverPartialFiles(raw: string): Array<{ path: string; content: string }> | null {
   const filesIdx = raw.indexOf('"files"');
   if (filesIdx === -1) return null;
@@ -2077,12 +2273,12 @@ export function parseGeneratedOutput(raw: string): GeneratedOutput {
     if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
       throw new Error("Invalid JSON structure from OpenAI");
     }
-    return { ...parsed, files: sanitizeImages(sanitizeMobile(sanitizeAosInit(parsed.files))) };
+    return { ...parsed, files: sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(parsed.files))))) };
   } catch {
     const recoveredFiles = recoverPartialFiles(cleaned);
     if (recoveredFiles && recoveredFiles.length > 0) {
       return {
-        files: sanitizeImages(sanitizeMobile(sanitizeAosInit(recoveredFiles))),
+        files: sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(recoveredFiles))))),
         message: "Сайт сгенерирован (восстановлен из обрезанного ответа)",
       };
     }
