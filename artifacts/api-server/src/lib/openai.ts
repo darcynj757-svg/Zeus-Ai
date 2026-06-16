@@ -1051,6 +1051,35 @@ Section background rotation (no two adjacent sections same):
   work → var(--color-surface), skills → var(--color-bg),
   about → var(--color-primary-light), testimonials → var(--gradient-section-dark) [DARK],
   contact → var(--color-bg), footer → var(--color-dark).`,
+  presentation: `
+PROJECT TYPE: PRESENTATION / SLIDE DECK (static HTML, no build)
+
+Build a polished, finished-looking slide deck that works on BOTH desktop and mobile.
+File structure: index.html (slides), style.css (design system), script.js (navigation). Static only — served via python http.server, NO build step, NO React.
+
+SLIDE STRUCTURE:
+- Each slide is a <section class="slide"> direct child of a <main class="deck"> container.
+- Produce at least 5 real slides driven by the user's topic: (1) title/cover, (2-N) content slides, (last) closing/CTA or thank-you. No empty or filler slides.
+- Every slide has real, specific, on-brand copy — NEVER 'Lorem ipsum', 'TODO', 'Slide 1' or bracketed stubs. Write the actual talk content.
+- Each slide: one clear heading + supporting body (bullets, stats, quote, or image). Keep it readable, not a wall of text.
+
+RESPONSIVE LAYOUT (mobile + desktop, mandatory):
+- .slide { min-height: 100svh; display: flex; flex-direction: column; justify-content: center; padding: clamp(24px, 6vw, 96px); }
+- Fluid type: headings clamp(28px, 6vw, 72px), body clamp(16px, 2.4vw, 22px). No fixed px font sizes.
+- Any multi-column slide content uses grid repeat(auto-fit, minmax(min(100%, 280px), 1fr)) so it collapses to one column on phones.
+- Images: aspect-ratio set, object-fit: cover, max-width:100%, with an onerror fallback (loremflickr.com / picsum.photos / images.unsplash.com/photo-<ID> only — NEVER source.unsplash.com).
+
+NAVIGATION (script.js, null-safe, no errors if elements missing):
+- Keyboard: ArrowRight/ArrowDown/Space/PageDown = next, ArrowLeft/ArrowUp/PageUp = prev, Home/End jump to first/last.
+- Touch: horizontal swipe on mobile moves between slides.
+- On-screen Prev/Next buttons (≥44px tap targets) + a slide counter (e.g. '03 / 08').
+- Implement nav by scrolling the target .slide into view (scroll-snap-type: y mandatory on .deck, scroll-snap-align: start on .slide) so plain scroll also works.
+- Wrap all listeners in DOMContentLoaded; guard every querySelector result before use.
+
+POLISH:
+- Cohesive design-system palette and fonts (Google Fonts via <link>). Subtle AOS data-aos="fade-up" reveal per slide; respect prefers-reduced-motion.
+- Progress indicator (thin bar or dots) reflecting current slide. Smooth 300ms transitions, no bouncy animations.
+- Result must look like a finished investor/conference deck — not a template or outline.`,
 };
 
 export function getTypePrompt(projectType?: string | null): string {

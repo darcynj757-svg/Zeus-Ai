@@ -14,12 +14,13 @@ const STYLES: Array<{ id: string; label: string; emoji: string }> = [
   { id: "elegant",  label: "Элегантный",  emoji: "✦" },
 ];
 
-const TABS: Array<{ icon: string; label: string; type: "landing" | "app" | "shop" | "card" | "portfolio"; desc: string }> = [
+const TABS: Array<{ icon: string; label: string; type: "landing" | "app" | "shop" | "card" | "portfolio" | "presentation"; desc: string }> = [
   { icon: "🌐", label: "Сайт-лендинг",    type: "landing",   desc: "Многосекционный сайт: hero, преимущества, цены, отзывы, footer" },
   { icon: "⚡", label: "Приложение",       type: "app",       desc: "SPA на React с состоянием, localStorage и несколькими экранами" },
   { icon: "🛒", label: "Интернет-магазин", type: "shop",      desc: "Каталог товаров с фильтрами, корзиной и оформлением заказа" },
   { icon: "🪪", label: "Визитка",          type: "card",      desc: "Одностраничная визитка: контакты, соцсети, кнопка «Связаться»" },
   { icon: "🎨", label: "Портфолио",        type: "portfolio", desc: "Личный сайт специалиста: проекты, навыки, отзывы, форма контакта" },
+  { icon: "📊", label: "Презентация",    type: "presentation", desc: "Слайд-дек: обложка, контент-слайды, навигация с клавиатуры/свайп, адаптив под мобилку и ПК" },
 ];
 
 const CHIP_PROMPTS = [
