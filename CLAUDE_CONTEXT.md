@@ -474,3 +474,45 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 - Каждая фича — отдельный атомарный коммит с осмысленным сообщением.
 - После каждого изменения обновлять `CLAUDE_CONTEXT.md`.
 - **Не пушить** — пользователь пушит вручную.
+
+---
+
+## Этап 5 — Готовый вид (PRODUCTION-READY GENERATION) — В РАБОТЕ
+
+**Проблема (диагноз).** Технический каркас уже адаптивный: R-P-A + M1–M6 + шесть детерминированных sanitizers (Scripts/Fonts/Images/Navbar/Mobile/AosInit) гарантируют, что сайт корректно отображается на мобилке и ПК. Но визуально и по содержанию генерации всё ещё «сырые»: мало секций, заглушечный/обобщённый текст вместо реального доменного контента, однообразные раскладки, бедные hero и CTA. Цель этапа — поднять выход от «технически рабочего» до «похожего на готовый коммерческий проект».
+
+**Задачи (по приоритету):**
+
+- **CONTENT DENSITY** — запрет на Lorem ipsum и обобщённые заглушки. Требовать реалистичный доменный копирайтинг: конкретные названия услуг/товаров, реальные цены, тексты отзывов с именами и ролями, FAQ из 4–6 вопросов, развёрнутые описания вместо общих фраз.
+- **МИНИМУМ СЕКЦИЙ ПО ТИПУ** — жёсткий нижний порог с E2E-проверкой количества section: landing >= 8, shop >= 6, portfolio >= 7, card = 1 (но насыщенная), presentation >= 6 слайдов.
+- **sanitizeContent post-процессор** (7-й в цепочке, outermost) — детектит Lorem ipsum / placeholder-паттерны / пустые или дублирующиеся секции и помечает результат как требующий регенерации либо инжектит дефолтный осмысленный контент. Идемпотентна, с unit-тестами.
+- **VISUAL VARIETY** — бороться с однообразием: чередовать раскладки секций (left-image / right-image / centered / grid), не повторять один layout-паттерн подряд.
+- **РАСШИРЕНИЕ ТИПОВ** — добавить presentation (слайд-дек: навигация по слайдам, прогресс, клавиши со стрелками) и blog (список постов + страница статьи) как новые TYPE_PROMPTS.
+- **E2E ГОТОВНОСТИ** — новый чек-лист production-ready: плотность контента, число секций >= порога, разнообразие раскладок, реальные фото во всех секциях, осмысленный hero + CTA.
+
+### Журнал коммитов — синхронизация с origin/main
+
+| Хэш | Сообщение |
+|------|-----------|
+| fa47fea | Upgrade visual language: gradient hero, alternating sections, elevation system |
+| b5c3803 | Add portfolio project type with photo hero, work grid, animated skills |
+| 073e054 | Enhance website generation with responsiveness, performance, accessibility |
+| 9ad3fc8 | Add a post-processor to fix and improve image tags across generated sites |
+| 1571c14 | Update sanitizers to fix font, navbar, and mobile header issues |
+| ea1b1d7 | Add safeguards to ensure navigation displays correctly on all screen sizes |
+| 4ed05ba | Add a script fallback to ensure website interactivity |
+| (pending) | Этап 5: sanitizeContent + content-density rules + минимум секций + presentation |
+
+### ТОЧКА ВХОДА ДЛЯ СЛЕДУЮЩЕЙ СЕССИИ (обновлено)
+
+**Текущая задача.** Проекты выходят технически адаптивными, но «сырыми» по наполнению. Работаем над Этапом 5 — production-ready вид.
+
+**Следующий конкретный шаг:**
+
+1. Добавить блок CONTENT RULES в SYSTEM_PROMPT (openai.ts): запрет Lorem ipsum, требование реального доменного копирайтинга, минимум секций по типу.
+2. Реализовать export function sanitizeContent(files) — outermost guard в цепочке поверх sanitizeScripts. Детект placeholder-паттернов + проверка минимума section.
+3. Unit-тесты sanitizeContent.test.ts.
+4. Добавить TYPE_PROMPTS для presentation (слайд-дек) — отдельный шаг.
+5. Прогнать E2E готовности на новом проекте, зафиксировать результаты таблицей.
+
+**Инвариант (не менять):** цепочка sanitizers идемпотентна, нулевого-токен, не ломает строгий JSON { files, message }. sanitizeContent не должна выбрасывать исключение — только помечать или чинить.
