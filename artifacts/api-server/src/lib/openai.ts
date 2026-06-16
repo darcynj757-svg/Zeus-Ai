@@ -141,7 +141,8 @@ ANIMATIONS (AOS + Animate.css — mandatory)
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
-- In script.js inside DOMContentLoaded: AOS.init({ duration: 700, once: true, offset: 80 });
+- In script.js inside DOMContentLoaded, call AOS.init() UNCONDITIONALLY — never inside an if-block:
+    AOS.init({ duration: 700, once: true, offset: 80 });
 - Add data-aos on every section and card:
     data-aos="fade-up"      — sections scrolling in
     data-aos="fade-right"   — left-side content
@@ -322,8 +323,8 @@ INTERACTIVITY (vanilla JS in script.js — mandatory)
 ═══════════════════════════════════════
 Always implement ALL that apply to the project type:
 - DOMContentLoaded wrapper: all JS inside document.addEventListener('DOMContentLoaded', () => { ... })
-- AOS.init({ duration: 700, once: true, offset: 80 })  — always
-- lucide.createIcons()  — always, after AOS.init()
+- AOS.init({ duration: 700, once: true, offset: 80 })  — ALWAYS, UNCONDITIONALLY (never inside an if-block)
+- lucide.createIcons()  — ALWAYS, after AOS.init(), also unconditional
 - Hamburger menu: toggle .nav-open on <nav>, swap data-lucide="menu"↔"x", then re-run lucide.createIcons()
 - Navbar scroll: window.addEventListener('scroll', () => header.classList.toggle('scrolled', scrollY > 50))
 - Smooth scroll: all a[href^="#"] → e.preventDefault() + target.scrollIntoView({ behavior: 'smooth' })
@@ -418,9 +419,29 @@ R4. REDUCED MOTION — mandatory @media block
         scroll-behavior: auto !important;
       }
     }
-• In script.js, disable AOS when the user prefers reduced motion:
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    AOS.init({ duration: prefersReduced ? 0 : 700, once: true, offset: 80 });
+• CRITICAL — AOS.init() and lucide.createIcons() MUST be called UNCONDITIONALLY every time.
+  NEVER wrap AOS.init() in an if-block. Doing so leaves ALL [data-aos] elements at opacity:0.
+
+  ❌ WRONG — causes entire page content to be invisible:
+      if (!prefersReduced) { AOS.init({ duration: 700, once: true, offset: 80 }); }
+
+  ✅ CORRECT — copy this EXACTLY into script.js, inside DOMContentLoaded:
+      const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      AOS.init({ duration: prefersReduced ? 0 : 700, easing: 'ease', once: true, offset: 80 });
+      lucide.createIcons();
+
+  The prefers-reduced-motion flag changes ONLY the duration (0 vs 700ms).
+  AOS.init() and lucide.createIcons() run regardless of the flag value.
+
+• MANDATORY CSS fallback — add this block to style.css, BEFORE the @media (prefers-reduced-motion) block:
+    /* AOS CDN failure fallback: keep content visible if AOS script fails to load.
+       AOS adds class .aos-init when it processes each element;
+       without it (CDN failure / blocked), elements stay fully visible. */
+    [data-aos]:not(.aos-init) {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
 
 ═══════════════════════════════════════
 MOBILE HARDENING  (M1–M6 — mandatory for EVERY project)
@@ -556,7 +577,7 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ Real <img> tags using images.unsplash.com or loremflickr everywhere (zero CSS/emoji placeholders, zero source.unsplash.com)?
 □ Every <img> has: meaningful alt + loading="lazy" (eager on hero) + decoding="async" + onerror fallback + explicit width AND height attributes?
 □ Lucide loaded in <head>, lucide.createIcons() called in script.js?
-□ AOS loaded in <head>, AOS.init() with prefers-reduced-motion check, data-aos on every section and card?
+□ AOS loaded in <head>, AOS.init() called UNCONDITIONALLY (NEVER inside an if-block — wrapping it causes all content to stay opacity:0), duration ternary for prefers-reduced-motion, data-aos on every section and card?
 □ Hero headline/subheadline have Animate.css classes?
 □ [R1] RESPONSIVE: ≥ 3 @media breakpoints (481/768/1024)? Every grid collapses to 1-col on mobile? body has overflow-x:hidden?
 □ [R1] BURGER MENU: <button class="hamburger" aria-label aria-expanded aria-controls> present? JS toggles nav-open + aria-expanded + icon? Keyboard-accessible (Enter/Space/Escape)?
@@ -565,7 +586,7 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ [R3] :focus-visible: global rule in style.css using var(--color-primary)?
 □ [R3] FORM LABELS: every input/textarea has a <label> (visible or .sr-only)?
 □ [R3] ARIA-LABEL: every icon-only button/link has aria-label?
-□ [R4] REDUCED MOTION: @media (prefers-reduced-motion: reduce) block at end of style.css? AOS.init uses prefersReduced check?
+□ [R4] REDUCED MOTION: @media (prefers-reduced-motion: reduce) block at end of style.css? [data-aos]:not(.aos-init) fallback rule present in style.css (keeps content visible if CDN fails)? AOS.init() called unconditionally — duration ternary only, NEVER if-wrapped?
 □ [M1] VIEWPORT META: index.html contains EXACTLY <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"> (with viewport-fit=cover)?
 □ [M1] SAFE-AREA CSS: style.css contains env(safe-area-inset-top) on header AND env(safe-area-inset-bottom) on footer / .sticky-cta?
 □ [M2] FLUID TYPOGRAPHY: ALL heading font-sizes use clamp()? Section padding uses clamp()? No fixed-px headings?
