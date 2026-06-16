@@ -115,9 +115,18 @@ NEVER use coloured div / CSS-only placeholders instead of real photos.
 
 ── IMG RULES (every <img> must have ALL 4) ─────────────────────────────
 1. alt="meaningful description of what the photo shows"
-2. loading="lazy"
+2. loading="lazy"  (use loading="eager" only on the hero background photo)
 3. CSS: object-fit: cover  (on the <img> or its container)
-4. onerror="this.onerror=null;this.src='https://picsum.photos/seed/'+Math.random()+'/800/600'"
+4. onerror with a loremflickr fallback keyed to the photo's theme (MANDATORY on every <img>):
+   onerror="this.onerror=null;this.src='https://loremflickr.com/1200/800/KEYWORD'"
+   Replace KEYWORD with a single lowercase word that matches the photo subject
+   (e.g. coffee, barbershop, fitness, restaurant, technology, nature).
+   ❌ WRONG: omitting onerror entirely — leaves a black/broken block when ID fails to resolve.
+   ❌ WRONG: using Math.random() in the fallback — produces a random unrelated image.
+   ✅ CORRECT: onerror="this.onerror=null;this.src='https://loremflickr.com/1200/800/barbershop'"
+• NEVER invent or guess Unsplash photo IDs. Use ONLY the curated IDs listed above.
+  If none match your theme, use loremflickr.com as the PRIMARY source (② above) instead.
+  An invented ID returns a 404 → black square. There is no excuse for a broken image.
 • Containers must have explicit height (min 220 px for cards, ≥ 500 px for hero).
 • NEVER use source.unsplash.com — deprecated, returns HTTP 503.
 
@@ -639,8 +648,9 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ CARD HOVER: do all cards have translateY(-6px) on hover + box-shadow upgrade + transition?
 □ CARD RADIUS: is border-radius ≥ 16px (var(--radius-xl)) on all cards?
 □ GRADIENT BUTTONS: do primary CTAs use var(--gradient-primary) or equivalent gradient background?
-□ Real <img> tags using images.unsplash.com or loremflickr everywhere (zero CSS/emoji placeholders, zero source.unsplash.com)?
-□ Every <img> has: meaningful alt + loading="lazy" (eager on hero) + decoding="async" + onerror fallback + explicit width AND height attributes?
+□ Real <img> tags using images.unsplash.com or loremflickr everywhere (zero CSS/emoji placeholders, zero source.unsplash.com, zero fabricated/invented Unsplash photo IDs)?
+□ Every images.unsplash.com <img> has a THEMED onerror fallback: onerror="this.onerror=null;this.src='https://loremflickr.com/1200/800/KEYWORD'" — KEYWORD must match the photo's subject (not Math.random())?
+□ Every <img> has: meaningful non-empty alt + loading="lazy" (loading="eager" on hero only) + decoding="async" + onerror fallback + explicit width AND height attributes?
 □ Lucide loaded in <head>, lucide.createIcons() called in script.js?
 □ AOS loaded in <head>, AOS.init() called UNCONDITIONALLY (NEVER inside an if-block — wrapping it causes all content to stay opacity:0), duration ternary for prefers-reduced-motion, data-aos on every section and card?
 □ Hero headline/subheadline have Animate.css classes?
@@ -1901,6 +1911,110 @@ export function sanitizeMobile(
 
 // ─── END MOBILE POST-PROCESSING ──────────────────────────────────────────────
 
+// ─── IMAGE POST-PROCESSING ────────────────────────────────────────────────────
+// Deterministic, zero-token, idempotent audit applied inside parseGeneratedOutput.
+// Operates on every .html / .htm / .jsx / .tsx file.
+// Fixes:
+//   1. Replaces deprecated source.unsplash.com → images.unsplash.com
+//   2. Adds themed onerror loremflickr fallback to images.unsplash.com <img> that lack one
+//   3. Adds loading="lazy" when the attribute is absent
+//   4. Adds alt="Photo" when the attribute is missing or empty
+// Makes ZERO network calls, consumes ZERO OpenAI tokens.
+// Idempotent: re-running on already-correct files returns them unchanged.
+
+/** Extract a concise loremflickr keyword from an img's alt text or src URL. */
+function extractImgKeyword(src: string, alt: string): string {
+  const altWord = alt.trim().split(/\s+/)[0]?.replace(/[^a-zA-Z]/g, "").toLowerCase() ?? "";
+  if (altWord.length > 2) return altWord;
+  // Reuse keyword already embedded in a loremflickr src (supports idempotency)
+  const m = /loremflickr\.com\/\d+\/\d+\/([^?&"'\s]+)/i.exec(src);
+  if (m?.[1]) return m[1];
+  return "photo";
+}
+
+/** Repair a single matched <img ...> tag string. */
+function repairImgTag(tag: string): { tag: string; changed: boolean } {
+  let out = tag;
+  let changed = false;
+
+  // 1. Deprecated CDN → supported CDN
+  if (out.includes("source.unsplash.com")) {
+    out = out.replace(/source\.unsplash\.com/gi, "images.unsplash.com");
+    changed = true;
+  }
+
+  // Pull attribute values for keyword extraction (after potential URL fix)
+  const srcM = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+))/i.exec(out);
+  const altM = /\balt\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(out);
+  const src  = srcM ? (srcM[1] ?? srcM[2] ?? srcM[3] ?? "") : "";
+  const alt  = altM ? (altM[1] ?? altM[2] ?? "") : "";
+  const hasAlt = altM !== null || /\balt\s*=/i.test(out);
+
+  // 2. Add themed onerror fallback to images.unsplash.com that are missing it
+  if (src.includes("images.unsplash.com") && !/\bonerror\b/i.test(out)) {
+    const kw = extractImgKeyword(src, alt);
+    const fallback = `https://loremflickr.com/1200/800/${kw}`;
+    out = out.replace(/(\s*\/?>)$/, ` onerror="this.onerror=null;this.src='${fallback}'"$1`);
+    changed = true;
+  }
+
+  // 3. Ensure alt is present and non-empty
+  if (!hasAlt) {
+    out = out.replace(/(\s*\/?>)$/, ` alt="Photo"$1`);
+    changed = true;
+  } else if (alt.trim() === "") {
+    out = out.replace(/\balt\s*=\s*(?:"[^"]*"|'[^']*')/, `alt="Photo"`);
+    changed = true;
+  }
+
+  // 4. Ensure loading attribute is present (don't clobber loading="eager" on hero)
+  if (!/\bloading\s*=/i.test(out)) {
+    out = out.replace(/(\s*\/?>)$/, ` loading="lazy"$1`);
+    changed = true;
+  }
+
+  return { tag: out, changed };
+}
+
+// Matches a complete <img ...> or <img ... /> tag, safely skipping quoted attribute values
+const IMG_TAG_RE = /<img\b(?:[^>"']|"[^"]*"|'[^']*')*\/?>/gi;
+
+export function sanitizeImages(
+  files: Array<{ path: string; content: string }>
+): Array<{ path: string; content: string }> {
+  const HTML_EXTS = /\.(html?|jsx?|tsx?)$/i;
+  let fixedFileCount = 0;
+
+  const result = files.map((file) => {
+    if (!HTML_EXTS.test(file.path)) return file;
+
+    let fileChanged = false;
+    const content = file.content.replace(IMG_TAG_RE, (match) => {
+      const { tag: fixed, changed } = repairImgTag(match);
+      if (changed) fileChanged = true;
+      return fixed;
+    });
+
+    if (fileChanged) {
+      fixedFileCount++;
+      return { ...file, content };
+    }
+    return file;
+  });
+
+  if (fixedFileCount > 0) {
+    console.warn(
+      `[sanitizeImages] Repaired <img> attributes in ${fixedFileCount} file(s): ` +
+        `ensured onerror/loremflickr fallback, loading="lazy", non-empty alt; ` +
+        `replaced any source.unsplash.com URLs`
+    );
+  }
+
+  return result;
+}
+
+// ─── END IMAGE POST-PROCESSING ───────────────────────────────────────────────
+
 function recoverPartialFiles(raw: string): Array<{ path: string; content: string }> | null {
   const filesIdx = raw.indexOf('"files"');
   if (filesIdx === -1) return null;
@@ -1963,12 +2077,12 @@ export function parseGeneratedOutput(raw: string): GeneratedOutput {
     if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
       throw new Error("Invalid JSON structure from OpenAI");
     }
-    return { ...parsed, files: sanitizeMobile(sanitizeAosInit(parsed.files)) };
+    return { ...parsed, files: sanitizeImages(sanitizeMobile(sanitizeAosInit(parsed.files))) };
   } catch {
     const recoveredFiles = recoverPartialFiles(cleaned);
     if (recoveredFiles && recoveredFiles.length > 0) {
       return {
-        files: sanitizeMobile(sanitizeAosInit(recoveredFiles)),
+        files: sanitizeImages(sanitizeMobile(sanitizeAosInit(recoveredFiles))),
         message: "Сайт сгенерирован (восстановлен из обрезанного ответа)",
       };
     }
