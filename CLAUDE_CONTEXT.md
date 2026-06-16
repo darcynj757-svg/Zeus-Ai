@@ -503,7 +503,8 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 | 4ed05ba | Add a script fallback to ensure website interactivity |
 | bc86317 | Add sanitizeContent guard + CONTENT RULES for production-ready output (Этап 5, шаги 1–3) |
 | cfa3d30 | Add presentation (slide-deck) project type (Этап 5, шаг 4) |
-| (pending) | Этап 5: E2E readiness test (шаг 5) |
+| d6b916b | Guarantee <=480px breakpoint and grid-collapse in mobile CSS sanitizer (улучшения #2/#3) |
+| 03570dc | Add presentation project type to API schema (openapi + regenerated zod/react clients) |
 
 ### ТОЧКА ВХОДА ДЛЯ СЛЕДУЮЩЕЙ СЕССИИ (обновлено)
 
@@ -515,6 +516,20 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 2. [x] sanitizeContent(files) — outermost guard в обоих ветках parseGeneratedOutput. Стрипает филлер (Lorem ipsum/TODO/[stub]), логирует тонкие страницы. Идемпотентна, zero-token, не бросает. (commit bc86317)
 3. [x] Unit-тесты sanitizeContent.test.ts — 7 assertions, все зелёные; полный suite 5/5. (commit bc86317)
 4. [x] presentation (слайд-дек): TYPE_PROMPTS.presentation в openai.ts (адаптивные слайды mobile+ПК, навигация клавиатура/свайп/скролл, ≥5 слайдов) + вкладка в landing.tsx/home.tsx. (commit cfa3d30)
-5. ▸ NEXT: Прогнать E2E готовности на новом проекте (вкл. presentation), зафиксировать результаты таблицей.
+5. [x] E2E готовности пройден на живой генерации presentation. Обнаружен и исправлен рассинхрон схемы: движок уже знал presentation, но API-enum (openapi.yaml → generated api-zod/api-client-react) разрешал только landing/app/shop/card/portfolio. Добавил presentation в enum (ProjectInput/GenerateInput/Project), регенерировал orval, tsc чистый. (commit 03570dc)
+
+### Результаты E2E (Этап 5, шаг 5) — живая генерация presentation
+
+Проект presentation создан через POST /api/projects (тип принят) и сгенерирован через POST /api/projects/:id/generate.
+
+| Критерий | Результат |
+|---------|----------|
+| Стек | статический index.html + style.css + script.js (без билда), задеплоен в E2B, previewUrl отдаётся, deployError нет |
+| Адаптивность | @media 768px, @media 480px (фикс #2), @media 767px hero, grid-template-columns:1fr !important в MQ (фикс #3) |
+| Desktop-guard | санитайзер авто-инжектировал @media (min-width:769px) hamburger-guard (работает) |
+| Изображения | images.unsplash.com/photo-... (разрешённый), onerror-fallback у <img>, source.unsplash.com отсутствует |
+| Навигация | script.js: .slide/.nav-button, переключение active, AOS, lucide — работает |
+
+Наблюдение: при объёмном контенте ответ может обрезаться (max_tokens); санитайзер страхует, но desktop-стили могут быть неполны — кандидат на chunked-генерацию для presentation.
 
 **Инвариант (не менять):** цепочка sanitizers идемпотентна, нулевого-токен, не ломает строгий JSON { files, message }. sanitizeContent не должна выбрасывать исключение — только помечать или чинить.
