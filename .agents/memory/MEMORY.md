@@ -1,1 +1,2 @@
 - [Express 5 router wildcards](express5-wildcards.md) — path-to-regexp@8 требует именованных wildcards: `/*name`, НЕ `/*` (бросает PathError).
+- [OpenAI model token limits](openai-token-limits.md) — gpt-4o и gpt-4o-mini поддерживают максимум 16384 completion tokens; значение 32000 бросает 400.

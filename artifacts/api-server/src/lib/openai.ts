@@ -1348,25 +1348,13 @@ export async function generateWithOpenAI(
         model,
         messages: chatMessages,
         temperature: 0.2,
-        max_tokens: 16000,
+        max_tokens: 16384,
       });
 
       response = completion.choices[0]?.message?.content ?? null;
       if (!response) throw new Error("Empty response from OpenAI");
 
-      const cleaned = response
-        .replace(/^```json\s*/i, "")
-        .replace(/^```\s*/i, "")
-        .replace(/```\s*$/i, "")
-        .trim();
-
-      const parsed = JSON.parse(cleaned) as GeneratedOutput;
-
-      if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
-        throw new Error("Invalid JSON structure from OpenAI");
-      }
-
-      return parsed;
+      return parseGeneratedOutput(response);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < 3) {
@@ -1401,7 +1389,7 @@ export async function* streamWithOpenAI(
     model,
     messages: chatMessages,
     temperature: 0.2,
-    max_tokens: 16000,
+    max_tokens: 16384,
     stream: true,
   });
 
@@ -1601,25 +1589,13 @@ export async function editProject(
           { role: "user", content: userContent },
         ],
         temperature: 0.2,
-        max_tokens: 16000,
+        max_tokens: 16384,
       });
 
       const response = completion.choices[0]?.message?.content ?? null;
       if (!response) throw new Error("Empty response from OpenAI");
 
-      const cleaned = response
-        .replace(/^```json\s*/i, "")
-        .replace(/^```\s*/i, "")
-        .replace(/```\s*$/i, "")
-        .trim();
-
-      const parsed = JSON.parse(cleaned) as GeneratedOutput;
-
-      if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
-        throw new Error("Invalid JSON structure from OpenAI");
-      }
-
-      return parsed;
+      return parseGeneratedOutput(response);
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < 3) {
@@ -1631,6 +1607,56 @@ export async function editProject(
   throw new Error(`editProject failed after 3 attempts: ${lastError?.message}`);
 }
 
+function recoverPartialFiles(raw: string): Array<{ path: string; content: string }> | null {
+  const filesIdx = raw.indexOf('"files"');
+  if (filesIdx === -1) return null;
+  const arrStart = raw.indexOf('[', filesIdx);
+  if (arrStart === -1) return null;
+
+  const files: Array<{ path: string; content: string }> = [];
+  let i = arrStart + 1;
+  const len = raw.length;
+
+  while (i < len) {
+    while (i < len && /[\s,]/.test(raw[i])) i++;
+    if (i >= len || raw[i] === ']') break;
+    if (raw[i] !== '{') break;
+
+    const objStart = i;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+
+    while (i < len) {
+      const ch = raw[i];
+      if (escape) { escape = false; i++; continue; }
+      if (ch === '\\' && inString) { escape = true; i++; continue; }
+      if (ch === '"') { inString = !inString; i++; continue; }
+      if (!inString) {
+        if (ch === '{') depth++;
+        else if (ch === '}') {
+          depth--;
+          if (depth === 0) { i++; break; }
+        }
+      }
+      i++;
+    }
+
+    if (depth !== 0) break;
+
+    try {
+      const obj = JSON.parse(raw.slice(objStart, i)) as Record<string, unknown>;
+      if (typeof obj.path === 'string' && typeof obj.content === 'string') {
+        files.push({ path: obj.path, content: obj.content });
+      }
+    } catch {
+      break;
+    }
+  }
+
+  return files.length > 0 ? files : null;
+}
+
 export function parseGeneratedOutput(raw: string): GeneratedOutput {
   const cleaned = raw
     .replace(/^```json\s*/i, "")
@@ -1638,11 +1664,20 @@ export function parseGeneratedOutput(raw: string): GeneratedOutput {
     .replace(/```\s*$/i, "")
     .trim();
 
-  const parsed = JSON.parse(cleaned) as GeneratedOutput;
-
-  if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
-    throw new Error("Invalid JSON structure from OpenAI");
+  try {
+    const parsed = JSON.parse(cleaned) as GeneratedOutput;
+    if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
+      throw new Error("Invalid JSON structure from OpenAI");
+    }
+    return parsed;
+  } catch {
+    const recoveredFiles = recoverPartialFiles(cleaned);
+    if (recoveredFiles && recoveredFiles.length > 0) {
+      return {
+        files: recoveredFiles,
+        message: "Сайт сгенерирован (восстановлен из обрезанного ответа)",
+      };
+    }
+    throw new Error("Could not parse or recover generated output");
   }
-
-  return parsed;
 }
