@@ -200,9 +200,9 @@ These reset lines are NON-NEGOTIABLE — every generated style.css MUST contain 
    --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
    --gradient-section-dark: linear-gradient(135deg, #0f1117 0%, #1a1a2e 100%);
 
-   /* Typography */
-   --font-sans: 'Inter', 'DM Sans', sans-serif;
-   --font-display: 'Playfair Display', 'Syne', serif;
+   /* Typography — BOTH variables MANDATORY; names MUST match Google Fonts <link> family= EXACTLY */
+   --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;   /* swap for your chosen display font */
+   --font-body:    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; /* swap for your chosen body font */
    --text-xs: clamp(0.75rem, 1vw, 0.875rem);
    --text-sm: clamp(0.875rem, 1.2vw, 1rem);
    --text-base: clamp(1rem, 1.5vw, 1.125rem);
@@ -235,11 +235,23 @@ These reset lines are NON-NEGOTIABLE — every generated style.css MUST contain 
    --transition-slow: 400ms ease;
 
 2. TYPOGRAPHY — always load 1–2 Google Fonts via <link> in <head>:
-   • Display/heading font (e.g. Playfair Display, Syne, DM Serif Display, Outfit)
-   • Body font (e.g. Inter, DM Sans, Plus Jakarta Sans)
-   • Hero headline: 48–80 px (var(--text-5xl)), font-display, font-weight 700–900
-   • Section headings: 28–40 px (var(--text-3xl/4xl))
-   • Body: 16–18 px (var(--text-base)), line-height 1.65
+   • Choose ONE display/heading font (e.g. Playfair Display, Syne, DM Serif Display, Outfit, Cormorant Garamond)
+   • Choose ONE body font (e.g. Inter, DM Sans, Plus Jakarta Sans, Nunito, Lato)
+   • CRITICAL — FONT NAME SYNC: the font-family name in the Google Fonts URL family=... MUST match
+     the name in --font-display / --font-body EXACTLY (letter-for-letter, including spaces and capitalisation).
+     ❌ WRONG: family=Playfair+Display in <link> but --font-display: 'Playfair' (truncated) → browser falls back to serif
+     ✅ CORRECT: family=Playfair+Display in <link> AND --font-display: 'Playfair Display', Georgia, serif
+     ❌ WRONG: family=DM+Sans in <link> but body uses font-family: var(--font-sans) that references 'Inter' → wrong font
+     ✅ CORRECT: family=DM+Sans in <link> AND --font-body: 'DM Sans', system-ui, sans-serif AND body { font-family: var(--font-body) }
+   • MANDATORY :root variables — BOTH must be present:
+       --font-display: '<ExactGoogleFontName>', Georgia, 'Times New Roman', serif;   /* display/heading */
+       --font-body:    '<ExactGoogleFontName>', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; /* body */
+   • MANDATORY base CSS rules — apply to body and headings:
+       body { font-family: var(--font-body); }
+       h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); }
+   • Hero headline: 48–80 px (var(--text-5xl)), var(--font-display), font-weight 700–900
+   • Section headings: 28–40 px (var(--text-3xl/4xl)), var(--font-display)
+   • Body: 16–18 px (var(--text-base)), var(--font-body), line-height 1.65
    • Line-height: 1.1–1.2 for headings
 
 3. HERO — MANDATORY premium treatment (every project type):
@@ -374,6 +386,58 @@ R1. RESPONSIVE — 3 REAL BREAKPOINTS (hard requirement)
     CSS (tablet+): @media (min-width:768px) { .nav-links { display:flex!important; flex-direction:row; } .hamburger { display:none; } }
     JS: toggle .nav-open on nav-links, toggle aria-expanded on button, swap lucide icon menu↔x.
     Keyboard: hamburger triggers on Enter/Space; Escape closes menu.
+
+• MANDATORY @media (max-width: 768px) BLOCK — add this as the LAST @media block in style.css
+  (after prefers-reduced-motion and AOS fallback, before end of file):
+    @media (max-width: 768px) {
+      /* NAV: hamburger visible, desktop links hidden */
+      .hamburger { display: flex !important; }
+      .nav-links:not(.nav-open) { display: none !important; }
+      .nav-links.nav-open {
+        display: flex !important;
+        flex-direction: column;
+        position: absolute; top: 100%; left: 0; right: 0;
+        background: var(--color-bg);
+        padding: var(--space-4);
+        box-shadow: var(--shadow-lg);
+        gap: var(--space-3);
+        z-index: 200;
+      }
+
+      /* GRIDS: all multi-column grids collapse to 1 column */
+      .grid, [class*="grid-"], [class*="-grid"],
+      .features-grid, .services-grid, .products-grid,
+      .testimonials-grid, .pricing-grid, .gallery-grid {
+        grid-template-columns: 1fr !important;
+        flex-direction: column !important;
+      }
+
+      /* HERO: reduce font-size and padding on mobile */
+      .hero { min-height: 85vh; }
+      .hero h1, .hero .hero-title { font-size: clamp(1.8rem, 7vw, 2.8rem) !important; }
+      .hero p, .hero .hero-sub  { font-size: clamp(0.95rem, 3vw, 1.2rem) !important; }
+      .hero .hero-content, .hero-inner { padding: var(--space-8) var(--space-4); }
+
+      /* SECTIONS: tighter vertical padding on mobile */
+      section, .section { padding: clamp(2.5rem, 8vw, 4rem) var(--space-4) !important; }
+
+      /* BUTTONS: full-width on mobile */
+      .btn, .btn-primary, .btn-secondary, .cta-btn {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+      }
+
+      /* FLEX ROWS: stack vertically */
+      .flex-row, .row, [class*="flex-row"], header nav,
+      .about-inner, .cta-inner, .contact-inner {
+        flex-direction: column !important;
+      }
+
+      /* IMAGES: never overflow */
+      img { max-width: 100% !important; height: auto !important; }
+      body { overflow-x: hidden; }
+    }
 
 R2. PERFORMANCE — RESOURCE HINTS + IMAGE SIZING
 ────────────────────────────────────────────────────────
@@ -567,6 +631,7 @@ QUALITY BAR
 ═══════════════════════════════════════
 Before finalising, mentally review each item — if any box is unchecked, fix it before outputting:
 
+□ FONTS — --font-display AND --font-body: both CSS variables defined in :root? Google Fonts <link> family= names match --font-display/--font-body EXACTLY (letter-for-letter)? body { font-family: var(--font-body) } present? h1–h6 { font-family: var(--font-display) } present? Both have reliable system fallback stacks?
 □ PHOTO COUNT: count real photo <img> tags (exclude 60px avatars, exclude Lucide icon imgs) — must be ≥ 5; if fewer, add photos to features/about/gallery.
 □ HERO: does hero have (a) full-viewport height, (b) background photo, (c) gradient overlay using brand colour (NOT plain black rgba), (d) overlapping preview card at bottom with negative margin-top?
 □ SECTION BACKGROUNDS: do adjacent sections have different backgrounds? Is there at least 1 dark section and 1 gradient/tinted section? If all sections look the same, fix the alternation.
@@ -580,6 +645,7 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ AOS loaded in <head>, AOS.init() called UNCONDITIONALLY (NEVER inside an if-block — wrapping it causes all content to stay opacity:0), duration ternary for prefers-reduced-motion, data-aos on every section and card?
 □ Hero headline/subheadline have Animate.css classes?
 □ [R1] RESPONSIVE: ≥ 3 @media breakpoints (481/768/1024)? Every grid collapses to 1-col on mobile? body has overflow-x:hidden?
+□ [R1] MOBILE MAX-WIDTH BLOCK: style.css contains @media (max-width: 768px) with (a) hamburger visible + nav-links hidden/shown, (b) grids → 1-col, (c) hero font-size reduced, (d) sections tighter padding, (e) buttons width:100%?
 □ [R1] BURGER MENU: <button class="hamburger" aria-label aria-expanded aria-controls> present? JS toggles nav-open + aria-expanded + icon? Keyboard-accessible (Enter/Space/Escape)?
 □ [R2] PRECONNECT: <link rel="preconnect"> for fonts.googleapis.com, fonts.gstatic.com crossorigin, images.unsplash.com, cdn.jsdelivr.net, unpkg.com in <head>?
 □ [R2] IMG SIZING: every <img> has BOTH width AND height numeric attributes to prevent layout shift?
@@ -1744,6 +1810,97 @@ export function sanitizeAosInit(
 
 // ─── END AOS POST-PROCESSING ─────────────────────────────────────────────────
 
+// ─── MOBILE POST-PROCESSING ──────────────────────────────────────────────────
+// Deterministic, zero-token, idempotent insurance for viewport meta and mobile CSS.
+
+const VIEWPORT_META_TAG =
+  '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">';
+
+/** Regex that matches any existing viewport meta variant so we can detect it before injecting */
+const VIEWPORT_META_RE = /<meta\s[^>]*name=["']viewport["'][^>]*>/i;
+
+const MOBILE_CSS_FALLBACK = `
+/* ── Mobile fallback (auto-injected: no @media (max-width) was present) ───── */
+@media (max-width: 768px) {
+  body { overflow-x: hidden; }
+  img  { max-width: 100% !important; height: auto !important; }
+  .hamburger { display: flex !important; }
+  .nav-links:not(.nav-open) { display: none !important; }
+  .nav-links.nav-open {
+    display: flex !important; flex-direction: column;
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: var(--color-bg, #fff);
+    padding: 1rem; box-shadow: 0 8px 24px rgba(0,0,0,0.12); z-index: 200;
+  }
+  .features-grid, .services-grid, .products-grid,
+  .testimonials-grid, .pricing-grid, .gallery-grid,
+  .grid, [class*="grid-"], [class*="-grid"] {
+    grid-template-columns: 1fr !important;
+  }
+  .flex-row, .row, [class*="flex-row"],
+  .about-inner, .cta-inner, .contact-inner {
+    flex-direction: column !important;
+  }
+  .btn, .btn-primary, .btn-secondary, .cta-btn {
+    width: 100%; justify-content: center;
+  }
+  section, .section { padding: 2.5rem 1rem !important; }
+  .hero h1, .hero .hero-title { font-size: clamp(1.8rem, 7vw, 2.8rem) !important; }
+  .hero p,  .hero .hero-sub   { font-size: clamp(0.95rem, 3vw, 1.2rem) !important; }
+}
+`;
+
+function fixViewportMeta(html: string): string {
+  if (VIEWPORT_META_RE.test(html)) return html; // already present — idempotent
+  // Inject right after <head> (or <html> if <head> absent)
+  const headIdx = html.indexOf("<head>");
+  if (headIdx !== -1) {
+    const insertAt = headIdx + "<head>".length;
+    return html.slice(0, insertAt) + "\n  " + VIEWPORT_META_TAG + html.slice(insertAt);
+  }
+  const htmlIdx = html.indexOf("<html");
+  const htmlTagEnd = htmlIdx !== -1 ? html.indexOf(">", htmlIdx) + 1 : -1;
+  if (htmlTagEnd > 0) {
+    return html.slice(0, htmlTagEnd) + "\n<head>\n  " + VIEWPORT_META_TAG + "\n</head>" + html.slice(htmlTagEnd);
+  }
+  return html; // can't determine where to inject — leave unchanged
+}
+
+function fixMobileCss(css: string): string {
+  if (/@media\s*\(\s*max-width\s*:/i.test(css)) return css; // already present — idempotent
+  return css + MOBILE_CSS_FALLBACK;
+}
+
+export function sanitizeMobile(
+  files: Array<{ path: string; content: string }>
+): Array<{ path: string; content: string }> {
+  let htmlFixed = false;
+  let cssFixed = false;
+
+  const result = files.map((file) => {
+    if (file.path === "index.html") {
+      const fixed = fixViewportMeta(file.content);
+      if (fixed !== file.content) { htmlFixed = true; return { ...file, content: fixed }; }
+    }
+    if (file.path === "style.css") {
+      const fixed = fixMobileCss(file.content);
+      if (fixed !== file.content) { cssFixed = true; return { ...file, content: fixed }; }
+    }
+    return file;
+  });
+
+  if (htmlFixed) {
+    console.warn("[sanitizeMobile] Fixed: viewport meta was missing from index.html — injected");
+  }
+  if (cssFixed) {
+    console.warn("[sanitizeMobile] Fixed: no @media (max-width) found in style.css — appended mobile fallback");
+  }
+
+  return result;
+}
+
+// ─── END MOBILE POST-PROCESSING ──────────────────────────────────────────────
+
 function recoverPartialFiles(raw: string): Array<{ path: string; content: string }> | null {
   const filesIdx = raw.indexOf('"files"');
   if (filesIdx === -1) return null;
@@ -1806,12 +1963,12 @@ export function parseGeneratedOutput(raw: string): GeneratedOutput {
     if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
       throw new Error("Invalid JSON structure from OpenAI");
     }
-    return { ...parsed, files: sanitizeAosInit(parsed.files) };
+    return { ...parsed, files: sanitizeMobile(sanitizeAosInit(parsed.files)) };
   } catch {
     const recoveredFiles = recoverPartialFiles(cleaned);
     if (recoveredFiles && recoveredFiles.length > 0) {
       return {
-        files: sanitizeAosInit(recoveredFiles),
+        files: sanitizeMobile(sanitizeAosInit(recoveredFiles)),
         message: "Сайт сгенерирован (восстановлен из обрезанного ответа)",
       };
     }
