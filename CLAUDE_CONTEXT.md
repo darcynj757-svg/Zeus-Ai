@@ -501,7 +501,8 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 | 1571c14 | Update sanitizers to fix font, navbar, and mobile header issues |
 | ea1b1d7 | Add safeguards to ensure navigation displays correctly on all screen sizes |
 | 4ed05ba | Add a script fallback to ensure website interactivity |
-| (pending) | Этап 5: sanitizeContent + content-density rules + минимум секций + presentation |
+| bc86317 | Add sanitizeContent guard + CONTENT RULES for production-ready output (Этап 5, шаги 1–3) |
+| (pending) | Этап 5: presentation TYPE_PROMPTS (шаг 4) + E2E readiness (шаг 5) |
 
 ### ТОЧКА ВХОДА ДЛЯ СЛЕДУЮЩЕЙ СЕССИИ (обновлено)
 
@@ -509,9 +510,10 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 
 **Следующий конкретный шаг:**
 
-1. Добавить блок CONTENT RULES в SYSTEM_PROMPT (openai.ts): запрет Lorem ipsum, требование реального доменного копирайтинга, минимум секций по типу.
-2. Реализовать export function sanitizeContent(files) — outermost guard в цепочке поверх sanitizeScripts. Детект placeholder-паттернов + проверка минимума section.
-3. Unit-тесты sanitizeContent.test.ts.
+1. [x] CONTENT RULES в SYSTEM_PROMPT (QUALITY BAR): запрет placeholder-филлера + требование ≥3 секций. (commit bc86317)
+2. [x] sanitizeContent(files) — outermost guard в обоих ветках parseGeneratedOutput. Стрипает филлер (Lorem ipsum/TODO/[stub]), логирует тонкие страницы. Идемпотентна, zero-token, не бросает. (commit bc86317)
+3. [x] Unit-тесты sanitizeContent.test.ts — 7 assertions, все зелёные; полный suite 5/5. (commit bc86317)
+   ▸ NEXT: шаг 4 ниже.
 4. Добавить TYPE_PROMPTS для presentation (слайд-дек) — отдельный шаг.
 5. Прогнать E2E готовности на новом проекте, зафиксировать результаты таблицей.
 
