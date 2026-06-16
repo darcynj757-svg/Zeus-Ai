@@ -1628,6 +1628,122 @@ export async function editProject(
   throw new Error(`editProject failed after 3 attempts: ${lastError?.message}`);
 }
 
+// ─── AOS POST-PROCESSING ────────────────────────────────────────────────────
+// Deterministic, zero-token fix applied inside parseGeneratedOutput.
+// Rewrites buggy "AOS.init wrapped in if(prefersReduced)" to unconditional call.
+// Appends [data-aos]:not(.aos-init) CSS fallback if missing.
+// Idempotent: returns files unchanged when no bug is detected.
+
+const AOS_CSS_FALLBACK = `
+/* AOS CDN failure fallback: keep content visible if AOS script fails to load.
+   AOS adds .aos-init when it processes each element; without it elements stay visible. */
+[data-aos]:not(.aos-init) {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+`;
+
+function fixAosCssFallback(css: string): string {
+  if (css.includes("[data-aos]:not(.aos-init)")) return css;
+  return css + AOS_CSS_FALLBACK;
+}
+
+function fixAosInScript(script: string): string {
+  // Quick bail-out: no AOS.init present at all
+  if (!script.includes("AOS.init(")) return script;
+
+  // Detect the bug: an if whose condition references a "reduc*" variable
+  // and whose body (or else-body) contains AOS.init
+  const bugPattern = /if\s*\(\s*!?\s*\w*[Rr]educ\w*\s*(?:===\s*(?:true|false))?\s*\)/;
+  const ifMatch = bugPattern.exec(script);
+  if (!ifMatch) return script; // no if(prefersReduced) — already unconditional
+
+  // Slice from the if onwards and find the brace-balanced end of if/else
+  const fromIf = script.slice(ifMatch.index);
+  const firstBrace = fromIf.indexOf("{");
+  if (firstBrace === -1) return script;
+
+  // Walk to end of if body
+  let i = firstBrace;
+  let depth = 0;
+  while (i < fromIf.length) {
+    if (fromIf[i] === "{") depth++;
+    else if (fromIf[i] === "}") { depth--; if (depth === 0) break; }
+    i++;
+  }
+  let ifBodyEnd = i + 1; // index within fromIf
+
+  // Extend to else-block if present
+  const afterIfBody = fromIf.slice(ifBodyEnd);
+  const elseMatch = /^\s*else\s*\{/.exec(afterIfBody);
+  if (elseMatch) {
+    i = ifBodyEnd + afterIfBody.indexOf("{");
+    depth = 0;
+    while (i < fromIf.length) {
+      if (fromIf[i] === "{") depth++;
+      else if (fromIf[i] === "}") { depth--; if (depth === 0) break; }
+      i++;
+    }
+    ifBodyEnd = i + 1;
+  }
+
+  // Verify AOS.init actually appears inside this if/else block
+  const ifBlock = fromIf.slice(0, ifBodyEnd);
+  if (!ifBlock.includes("AOS.init(")) return script; // AOS.init not in this if — leave alone
+
+  // Determine full replacement region: include preceding `const prefersReduced = …` line if present
+  const beforeIf = script.slice(0, ifMatch.index);
+  const prefersDecl = beforeIf.match(/([ \t]*const\s+\w*[Rr]educ\w*\s*=\s*window\.matchMedia[^\n]*\n)$/);
+  const blockStart = prefersDecl ? ifMatch.index - prefersDecl[1].length : ifMatch.index;
+  const blockEnd   = ifMatch.index + ifBodyEnd;
+
+  // Compute indentation from the first character of blockStart's line
+  const lineStart = script.lastIndexOf("\n", blockStart);
+  const indent = lineStart === -1 ? "" : (script.slice(lineStart + 1, blockStart).match(/^(\s*)/)?.[1] ?? "");
+
+  // Only emit the prefersReduced declaration if it wasn't already captured above
+  const needsDecl = !prefersDecl &&
+    !/const\s+\w*[Rr]educ\w*\s*=\s*window\.matchMedia/.test(script.slice(0, blockStart));
+
+  const replacement =
+    (needsDecl ? `${indent}const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;\n` : "") +
+    `${indent}AOS.init({ duration: prefersReduced ? 0 : 700, easing: 'ease', once: true, offset: 80 });\n` +
+    `${indent}lucide.createIcons();`;
+
+  return script.slice(0, blockStart) + replacement + script.slice(blockEnd);
+}
+
+export function sanitizeAosInit(
+  files: Array<{ path: string; content: string }>
+): Array<{ path: string; content: string }> {
+  let scriptFixed = false;
+  let cssFixed = false;
+
+  const result = files.map((file) => {
+    if (file.path === "script.js") {
+      const fixed = fixAosInScript(file.content);
+      if (fixed !== file.content) { scriptFixed = true; return { ...file, content: fixed }; }
+    }
+    if (file.path === "style.css") {
+      const fixed = fixAosCssFallback(file.content);
+      if (fixed !== file.content) { cssFixed = true; return { ...file, content: fixed }; }
+    }
+    return file;
+  });
+
+  if (scriptFixed) {
+    console.warn("[sanitizeAosInit] Fixed: AOS.init() was wrapped in if-block — rewrote as unconditional call");
+  }
+  if (cssFixed) {
+    console.warn("[sanitizeAosInit] Fixed: [data-aos]:not(.aos-init) CSS fallback was missing — appended to style.css");
+  }
+
+  return result;
+}
+
+// ─── END AOS POST-PROCESSING ─────────────────────────────────────────────────
+
 function recoverPartialFiles(raw: string): Array<{ path: string; content: string }> | null {
   const filesIdx = raw.indexOf('"files"');
   if (filesIdx === -1) return null;
@@ -1690,12 +1806,12 @@ export function parseGeneratedOutput(raw: string): GeneratedOutput {
     if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
       throw new Error("Invalid JSON structure from OpenAI");
     }
-    return parsed;
+    return { ...parsed, files: sanitizeAosInit(parsed.files) };
   } catch {
     const recoveredFiles = recoverPartialFiles(cleaned);
     if (recoveredFiles && recoveredFiles.length > 0) {
       return {
-        files: recoveredFiles,
+        files: sanitizeAosInit(recoveredFiles),
         message: "Сайт сгенерирован (восстановлен из обрезанного ответа)",
       };
     }
