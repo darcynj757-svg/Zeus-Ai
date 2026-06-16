@@ -722,6 +722,8 @@ Before finalising, mentally review each item — if any box is unchecked, fix it
 □ VERTICAL RHYTHM: section padding ≥ 80px top/bottom (clamp to 120px)?
 □ Type scale clearly hierarchical (hero 48–80px, sections 28–40px, body 16–18px)?
 □ All copy specific and meaningful (zero placeholders)?
+□ [CONTENT] NO placeholder filler anywhere: zero "Lorem ipsum", zero "TODO"/"FIXME"/"TBD"/"PLACEHOLDER", zero [bracketed] stubs. Every word is real, on-brand copy a paying client would ship. (A post-processor auto-strips leftover filler — do NOT rely on it; write real copy.)
+□ [CONTENT] STRUCTURAL DEPTH: page has at least 3 distinct <section> blocks (hero + value/features + social-proof/CTA at minimum) so the result looks finished, not a stub.
 □ Colour palette cohesive and brand-appropriate?
 □ [FONTS] Every font declared in --font-display AND --font-body has its own Google Fonts <link> in <head>? (Count your font variables; count your <link> tags. Every unique family = one <link>.)
 □ [NAVBAR CONTRAST] Navbar in its INITIAL (not-scrolled) state: are nav links and logo visible against the dark hero? Either color:#fff on .nav-links a in the base rule OR linear-gradient(rgba(0,0,0,0.40), transparent) as initial background?
@@ -2341,6 +2343,55 @@ export function sanitizeScripts(
 
 // ─── END SCRIPTS POST-PROCESSING ──────────────────────────────────────────────
 
+// ─── CONTENT POST-PROCESSING ─────────────────────────────────────────────
+// Deterministic, zero-token, idempotent content guard applied inside parseGeneratedOutput.
+// It NEVER writes quality copy (that is the model's job, enforced via CONTENT RULES in
+// SYSTEM_PROMPT). It only (a) replaces obvious placeholder filler with neutral safe text
+// so "Lorem ipsum" / "TODO" never reaches production, and (b) detects & logs structural
+// thinness (too few <section> blocks) so we can see "raw" output in the logs.
+// Must never throw — on any internal error it returns files unchanged.
+
+const LOREM_RE = /\b[Ll]orem\s+[Ii]psum\b[\s\S]*?(?=<|\n\n|$)/g;
+const PLACEHOLDER_TOKEN_RE = /\b(?:TODO|FIXME|PLACEHOLDER|REPLACE_ME|YOUR_TEXT_HERE|INSERT_TEXT|TBD)\b/g;
+const BRACKET_PLACEHOLDER_RE = /\[(?:placeholder|your[\s_-]?text|insert[\s_-]?\w+|todo)\]/gi;
+
+const NEUTRAL_TEXT = "Подробности скоро появятся.";
+const MIN_SECTIONS = 3;
+
+export function sanitizeContent(
+  files: Array<{ path: string; content: string }>
+): Array<{ path: string; content: string }> {
+  try {
+    return files.map((f) => {
+      if (!f.path.toLowerCase().endsWith(".html")) return f;
+
+      let content = f.content;
+      let replaced = 0;
+
+      const before = content;
+      content = content.replace(LOREM_RE, () => { replaced++; return NEUTRAL_TEXT + " "; });
+      content = content.replace(PLACEHOLDER_TOKEN_RE, () => { replaced++; return NEUTRAL_TEXT; });
+      content = content.replace(BRACKET_PLACEHOLDER_RE, () => { replaced++; return NEUTRAL_TEXT; });
+
+      if (replaced > 0) {
+        console.warn(`[sanitizeContent] ${f.path}: replaced ${replaced} placeholder fragment(s) with neutral text`);
+      }
+
+      const sectionCount = (content.match(/<section\b/gi) || []).length;
+      if (sectionCount < MIN_SECTIONS) {
+        console.warn(`[sanitizeContent] ${f.path}: only ${sectionCount} <section> block(s) (< ${MIN_SECTIONS}) — output may be structurally thin / "raw"`);
+      }
+
+      return content === before ? f : { ...f, content };
+    });
+  } catch (err) {
+    console.warn(`[sanitizeContent] skipped due to error: ${(err as Error).message}`);
+    return files;
+  }
+}
+// ─── END CONTENT POST-PROCESSING ─────────────────────────────────────────
+
+
 function recoverPartialFiles(raw: string): Array<{ path: string; content: string }> | null {
   const filesIdx = raw.indexOf('"files"');
   if (filesIdx === -1) return null;
@@ -2403,12 +2454,12 @@ export function parseGeneratedOutput(raw: string): GeneratedOutput {
     if (!Array.isArray(parsed.files) || typeof parsed.message !== "string") {
       throw new Error("Invalid JSON structure from OpenAI");
     }
-    return { ...parsed, files: sanitizeScripts(sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(parsed.files)))))) };
+    return { ...parsed, files: sanitizeContent(sanitizeScripts(sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(parsed.files))))))) };
   } catch {
     const recoveredFiles = recoverPartialFiles(cleaned);
     if (recoveredFiles && recoveredFiles.length > 0) {
       return {
-        files: sanitizeScripts(sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(recoveredFiles)))))),
+        files: sanitizeContent(sanitizeScripts(sanitizeFonts(sanitizeImages(sanitizeNavbar(sanitizeMobile(sanitizeAosInit(recoveredFiles))))))),
         message: "Сайт сгенерирован (восстановлен из обрезанного ответа)",
       };
     }
