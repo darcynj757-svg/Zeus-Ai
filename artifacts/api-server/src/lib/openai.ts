@@ -407,9 +407,20 @@ R1. RESPONSIVE — 3 REAL BREAKPOINTS (hard requirement)
             <i data-lucide="menu" aria-hidden="true"></i>
           </button>
           <ul id="nav-menu" class="nav-links" role="list"> … </ul>
-    CSS (mobile base): .nav-links { display:none; } — hidden by default on mobile.
-          .nav-links.nav-open { display:flex; flex-direction:column; … }
-    CSS (tablet+): @media (min-width:768px) { .nav-links { display:flex!important; flex-direction:row; } .hamburger { display:none; } }
+    CSS — write BOTH rules IN THE NAV SECTION (not just in the last @media block — put them right after .navbar {} rules):
+      /* Mobile-first: hamburger visible, nav links hidden */
+      .hamburger { display: flex; cursor: pointer; background: none; border: none; padding: 0.5rem; }
+      .nav-links { display: none; }                    /* hidden on mobile */
+      .nav-links.nav-open { display: flex; flex-direction: column; … }
+      /* Desktop: flip visibility */
+      @media (min-width: 769px) {
+        .hamburger { display: none; }                  /* ← CRITICAL: write this early so truncation can't cut it */
+        .nav-links { display: flex !important; flex-direction: row; align-items: center; gap: 1.5rem; }
+        .nav-links:not(.nav-open) { display: flex !important; }  /* override mobile hide */
+      }
+    ⚠ ANTI-PATTERN — these TWO rules MUST appear BEFORE the final @media (max-width:768px) block:
+      If ".hamburger { display: none }" inside "@media (min-width:769px)" is missing →
+      hamburger icon is visible on desktop and the nav links are invisible on desktop.
     JS: toggle .nav-open on nav-links, toggle aria-expanded on button, swap lucide icon menu↔x.
     Keyboard: hamburger triggers on Enter/Space; Escape closes menu.
 
@@ -2171,6 +2182,17 @@ const NAVBAR_MOBILE_GUARD = `
 }
 `;
 
+const HAMBURGER_DESKTOP_GUARD = `
+/* ── Hamburger desktop guard (auto-injected) ────────────────────────────────── */
+/* Fixes: hamburger visible on desktop / nav links hidden on desktop.
+   Happens when response was truncated before @media (min-width:769px) was written. */
+@media (min-width: 769px) {
+  .hamburger { display: none !important; }
+  .nav-links, #nav-menu { display: flex !important; flex-direction: row; align-items: center; gap: 1.5rem; }
+  .nav-links:not(.nav-open), #nav-menu:not(.nav-open) { display: flex !important; }
+}
+`;
+
 export function sanitizeNavbar(
   files: Array<{ path: string; content: string }>
 ): Array<{ path: string; content: string }> {
@@ -2197,6 +2219,18 @@ export function sanitizeNavbar(
     if (!css.includes("Mobile nav safety")) {
       css += NAVBAR_MOBILE_GUARD;
       fileChanged = true;
+    }
+
+    // 3. Hamburger desktop guard — inject when .hamburger class present but no min-width rule hides it
+    //    This fires when the response was truncated before the @media (min-width:769px) block was written,
+    //    leaving hamburger always visible and nav links always hidden on desktop.
+    if (!css.includes("Hamburger desktop guard") && /\.hamburger\s*\{/.test(css)) {
+      const hasDesktopHide = /min-width[^{]*\{[^}]*\.hamburger[^}]*display\s*:\s*none/s.test(css) ||
+                             /\.hamburger[^}]*display\s*:\s*none[^}]*\}[^@]*@media[^(]*\([^)]*min-width/s.test(css);
+      if (!hasDesktopHide) {
+        css += HAMBURGER_DESKTOP_GUARD;
+        fileChanged = true;
+      }
     }
 
     if (fileChanged) { cssChanged = true; return { ...file, content: css }; }

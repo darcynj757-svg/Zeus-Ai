@@ -140,6 +140,69 @@ run("contrast guard and mobile guard both appended at end of CSS", () => {
   assert(mobileIdx > origEnd - 10,   "Mobile guard appended after original CSS");
 });
 
+// ── Hamburger desktop guard tests ─────────────────────────────────────────────
+
+const CSS_HAMBURGER_NO_DESKTOP_HIDE = `.navbar { position: sticky; background: transparent; }
+.hamburger { display: flex; cursor: pointer; }
+.nav-links { display: none; }
+.nav-links.nav-open { display: flex; flex-direction: column; }
+@media (max-width: 768px) {
+  .hamburger { display: flex !important; }
+}`;
+
+const CSS_HAMBURGER_WITH_DESKTOP_HIDE = `.navbar { position: sticky; }
+.hamburger { display: flex; }
+.nav-links { display: none; }
+@media (min-width: 769px) {
+  .hamburger { display: none; }
+  .nav-links { display: flex; }
+}
+@media (max-width: 768px) {
+  .hamburger { display: flex !important; }
+}`;
+
+const CSS_HAMBURGER_MIN768 = `.navbar { position: sticky; }
+.hamburger { display: flex; }
+@media (min-width: 768px) { .hamburger { display: none; } .nav-links { display: flex; } }`;
+
+const CSS_NO_HAMBURGER = `.navbar { position: sticky; } .nav-links { display: flex; }`;
+
+run("injects hamburger desktop guard when .hamburger has no min-width hide rule", () => {
+  const out = findCss(sanitizeNavbar(css(CSS_HAMBURGER_NO_DESKTOP_HIDE)));
+  assert(out.includes("Hamburger desktop guard"), "Hamburger desktop guard marker injected");
+  assert(out.includes("display: none !important"), "hamburger hide rule injected");
+  assert(out.includes("min-width: 769px"), "@media min-width block injected");
+});
+
+run("does NOT inject hamburger guard when min-width hide already present", () => {
+  const out = findCss(sanitizeNavbar(css(CSS_HAMBURGER_WITH_DESKTOP_HIDE)));
+  assert(!out.includes("Hamburger desktop guard"), "No injection when desktop hide already exists");
+});
+
+run("does NOT inject hamburger guard when min-width 768px hide already present", () => {
+  const out = findCss(sanitizeNavbar(css(CSS_HAMBURGER_MIN768)));
+  assert(!out.includes("Hamburger desktop guard"), "No injection when min-width:768px hide exists");
+});
+
+run("does NOT inject hamburger guard when no .hamburger class in CSS", () => {
+  const out = findCss(sanitizeNavbar(css(CSS_NO_HAMBURGER)));
+  assert(!out.includes("Hamburger desktop guard"), "No injection when no .hamburger class");
+});
+
+run("hamburger guard includes nav-links flex show rule", () => {
+  const out = findCss(sanitizeNavbar(css(CSS_HAMBURGER_NO_DESKTOP_HIDE)));
+  assert(out.includes(".nav-links") && out.includes("display: flex !important"), "nav-links show rule present");
+});
+
+run("hamburger guard idempotent: running twice produces same output", () => {
+  const input = css(CSS_HAMBURGER_NO_DESKTOP_HIDE);
+  const once  = sanitizeNavbar(input);
+  const twice = sanitizeNavbar(once);
+  assert(findCss(once) === findCss(twice), "Second run identical to first (hamburger guard idempotent)");
+  const count = (findCss(once).match(/Hamburger desktop guard/g) ?? []).length;
+  assert(count === 1, `Hamburger guard appears exactly once (found ${count})`);
+});
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 console.log(`\n─────────────────────────────────────────`);
 console.log(`sanitizeNavbar: ${passed} passed, ${failed} failed`);
