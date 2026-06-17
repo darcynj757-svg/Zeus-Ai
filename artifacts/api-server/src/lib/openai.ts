@@ -1385,7 +1385,7 @@ BUTTONS (extra bold and rounded):
   Secondary: background: #fff; border: 2px solid #1a1035; color: #1a1035; border-radius: var(--radius-full); box-shadow: 3px 3px 0px #1a1035;
 
 TYPOGRAPHY (load via Google Fonts):
-  Display heading font: 'Nunito' or 'Fredoka One', weight 700–900
+  Display heading font: 'Fredoka' or 'Nunito', weight 600–700  (use the 'Fredoka' Google Fonts family for headings; keep 'Nunito' for body text to preserve heading/body contrast)
   Body font: 'Nunito' or 'Poppins', weight 400–500
   Hero headline: font-weight: 900; letter-spacing: -0.02em; color: #fff
   HERO PHOTO OVERLAY: the bright orange→purple --gradient-hero is decorative — under the white headline you MUST keep a darkening layer so the text stays readable. Either lower overlay alpha and add a dark scrim (e.g. extra linear-gradient(rgba(26,16,53,0.35), rgba(26,16,53,0.65)) on top of the photo), or constrain the vivid tint to the hero edges. Never let the saturated orange/purple wash flood the whole photograph — keep the centre behind the headline sufficiently dark.
