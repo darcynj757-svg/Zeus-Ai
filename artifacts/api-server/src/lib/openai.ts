@@ -1496,6 +1496,41 @@ function getOpenAIClient(): OpenAI {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
+// Calls the chat API and, if the model output is cut off (finish_reason === "length"),
+// automatically requests continuations and concatenates them. Eliminates truncated
+// HTML/CSS/JS that previously produced "raw" / non-responsive output.
+async function createCompletionWithContinuation(
+  openai: OpenAI,
+  model: string,
+  messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
+  temperature: number
+): Promise<string> {
+  const working = [...messages];
+  let full = "";
+  const MAX_CONTINUATIONS = 4;
+  for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: working,
+      temperature,
+      max_tokens: 16384,
+    });
+    const choice = completion.choices[0];
+    const part = choice?.message?.content ?? "";
+    full += part;
+    if (choice?.finish_reason !== "length") {
+      return full;
+    }
+    working.push({ role: "assistant", content: part });
+    working.push({
+      role: "user",
+      content:
+        "Continue the response EXACTLY where you stopped. Do not repeat any characters already sent. Do not restart the JSON. Output only the raw continuation so that concatenating it to the previous text yields the complete valid JSON object.",
+    });
+  }
+  return full;
+}
+
 export async function generateWithOpenAI(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   userMessage: string,
@@ -1520,14 +1555,12 @@ export async function generateWithOpenAI(
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const completion = await openai.chat.completions.create({
-        model,
-        messages: chatMessages,
-        temperature: 0.2,
-        max_tokens: 16384,
-      });
-
-      response = completion.choices[0]?.message?.content ?? null;
+      response = await createCompletionWithContinuation(
+          openai,
+          model,
+          chatMessages,
+          0.2
+        );
       if (!response) throw new Error("Empty response from OpenAI");
 
       return parseGeneratedOutput(response);

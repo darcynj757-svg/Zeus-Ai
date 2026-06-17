@@ -239,7 +239,14 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
 
   const wantsSSE = (req.headers.accept ?? "").includes("text/event-stream");
 
-  const projectType = body.data.projectType ?? project.projectType ?? "landing";
+  // Auto-detect presentation/slide-deck requests when no explicit type was chosen,
+  // so the presentation prompt (slides + slide navigation) is actually used.
+  const explicitType = body.data.projectType ?? project.projectType ?? null;
+  const detectPresentationType = (msg: string): boolean =>
+    /presentation|slide\s?deck|\bslides?\b|\bdeck\b|\u043f\u0440\u0435\u0437\u0435\u043d\u0442\u0430\u0446\u0438|\u0441\u043b\u0430\u0439\u0434/i.test(msg);
+  const projectType =
+    explicitType ??
+    (detectPresentationType(body.data.message) ? "presentation" : "landing");
   const style = body.data.style ?? project.style ?? null;
   const tier = parseTier((req.body as Record<string, unknown>).tier);
 
