@@ -528,6 +528,8 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 | cfa3d30 | Add presentation (slide-deck) project type (Этап 5, шаг 4) |
 | d6b916b | Guarantee <=480px breakpoint and grid-collapse in mobile CSS sanitizer (улучшения #2/#3) |
 | 03570dc | Add presentation project type to API schema (openapi + regenerated zod/react clients) |
+| 1aee583 | Add truncation recovery (continuation) to streaming generation path (PR #1) |
+| a2809e6 | Trim stray markdown fences at continuation seams (both stream and non-stream) (PR #1) |
 
 ### ТОЧКА ВХОДА ДЛЯ СЛЕДУЮЩЕЙ СЕССИИ (обновлено)
 
@@ -554,5 +556,16 @@ pnpm --filter @workspace/db run push  # drizzle-миграции
 | Навигация | script.js: .slide/.nav-button, переключение active, AOS, lucide — работает |
 
 Наблюдение: при объёмном контенте ответ может обрезаться (max_tokens); санитайзер страхует, но desktop-стили могут быть неполны — кандидат на chunked-генерацию для presentation.
+
+### Следующий выполненный шаг — устранение обрезки в стриминге (PR #1, ветка fix/stream-continuation)
+
+**Диагноз.** Truncation recovery был только в non-streaming generateWithOpenAI (createCompletionWithContinuation). SSE-путь streamWithOpenAI делал одиночный create() с max_tokens 16384 и не проверял finish_reason — большие генерации (особенно presentation) молча обрывались на середине JSON. Это и был кандидат на chunked-генерацию из предыдущего шага.
+
+**Что изменено (artifacts/api-server/src/lib/openai.ts):**
+
+1. streamWithOpenAI — обёрнут в continuation-цикл (до 4 дозапросов), зеркалящий createCompletionWithContinuation. Каждая дельта по-прежнему yield'ится сразу (потоковость не меняется); при finish_reason === "length" добавляется assistant-часть + "continue exactly where you stopped" и поток продолжается. (commit 1aee583)
+2. Хелпер trimContinuation() — срезает ведущий markdown-забор (```/```json) у частей-продолжений, чтобы слепая склейка стыка давала валидный JSON. Применён в createCompletionWithContinuation (к частям с i≥1) и в streamWithOpenAI (буферизация начала continuation-части до yield, с финальным флешем). (commit a2809e6)
+
+**Статус.** Изменения в открытом PR #1 (fix/stream-continuation → main), 2 коммита, оба Verified, diff +66/−11, «Able to merge». Мёрж в main — за пользователем. После мёржа: прогнать tsc + тесты; рассмотреть unit-тест на поведение continuation-стыка (короткая continuation-часть < 16 символов).
 
 **Инвариант (не менять):** цепочка sanitizers идемпотентна, нулевого-токен, не ломает строгий JSON { files, message }. sanitizeContent не должна выбрасывать исключение — только помечать или чинить.
