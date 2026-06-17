@@ -1499,6 +1499,13 @@ function getOpenAIClient(): OpenAI {
 // Calls the chat API and, if the model output is cut off (finish_reason === "length"),
 // automatically requests continuations and concatenates them. Eliminates truncated
 // HTML/CSS/JS that previously produced "raw" / non-responsive output.
+// Strips leading markdown fences / stray whitespace that a model sometimes
+// emits at the start of a continuation chunk, so blind concatenation of
+// continuation parts still yields a single valid JSON object.
+function trimContinuation(part: string): string {
+  return part.replace(/^\s*```(?:json)?\s*/i, "");
+}
+
 async function createCompletionWithContinuation(
   openai: OpenAI,
   model: string,
@@ -1516,7 +1523,8 @@ async function createCompletionWithContinuation(
       max_tokens: 16384,
     });
     const choice = completion.choices[0];
-    const part = choice?.message?.content ?? "";
+    const raw = choice?.message?.content ?? "";
+    const part = i === 0 ? raw : trimContinuation(raw);
     full += part;
     if (choice?.finish_reason !== "length") {
       return full;
@@ -1613,15 +1621,35 @@ export async function* streamWithOpenAI(
 
     let part = "";
     let finishReason: string | null = null;
+    // For continuation rounds (i >= 1) the model may prefix the chunk with a
+    // stray ```json fence; buffer the lead until we can strip it before yielding.
+    let leadHandled = i === 0;
+    let lead = "";
 
     for await (const chunk of stream) {
       const choice = chunk.choices[0];
       const delta = choice?.delta?.content;
       if (delta) {
         part += delta;
-        yield delta;
+        if (leadHandled) {
+          yield delta;
+        } else {
+          lead += delta;
+          // Once we have enough to decide (or a newline), strip a leading fence and flush.
+          if (lead.length >= 16 || lead.includes("\n")) {
+            const cleaned = trimContinuation(lead);
+            if (cleaned) yield cleaned;
+            leadHandled = true;
+            lead = "";
+          }
+        }
       }
       if (choice?.finish_reason) finishReason = choice.finish_reason;
+    }
+    // Flush any buffered lead if the stream ended before the threshold.
+    if (!leadHandled && lead) {
+      const cleaned = trimContinuation(lead);
+      if (cleaned) yield cleaned;
     }
 
     if (finishReason !== "length") return;
