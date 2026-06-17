@@ -1594,17 +1594,44 @@ export async function* streamWithOpenAI(
     { role: "user", content: userMessage },
   ];
 
-  const stream = await openai.chat.completions.create({
-    model,
-    messages: chatMessages,
-    temperature: 0.2,
-    max_tokens: 16384,
-    stream: true,
-  });
+  // Stream with truncation recovery: if the model stops with finish_reason
+  // "length", request continuations and keep streaming so SSE output is never
+  // cut off mid-JSON (mirrors createCompletionWithContinuation for the SSE path).
+  const working: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
+    ...chatMessages,
+  ];
+  const MAX_CONTINUATIONS = 4;
 
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content;
-    if (delta) yield delta;
+  for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
+    const stream = await openai.chat.completions.create({
+      model,
+      messages: working,
+      temperature: 0.2,
+      max_tokens: 16384,
+      stream: true,
+    });
+
+    let part = "";
+    let finishReason: string | null = null;
+
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      const delta = choice?.delta?.content;
+      if (delta) {
+        part += delta;
+        yield delta;
+      }
+      if (choice?.finish_reason) finishReason = choice.finish_reason;
+    }
+
+    if (finishReason !== "length") return;
+
+    working.push({ role: "assistant", content: part });
+    working.push({
+      role: "user",
+      content:
+        "Continue the response EXACTLY where you stopped. Do not repeat any characters already sent. Do not restart the JSON. Output only the raw continuation so that concatenating it to the previous text yields the complete valid JSON object.",
+    });
   }
 }
 
