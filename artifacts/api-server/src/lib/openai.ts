@@ -1335,6 +1335,7 @@ TYPOGRAPHY (load via Google Fonts):
 
 HERO:
   Full dark overlay + neon gradient accent
+  Overlay over the hero PHOTO must be a DARKENING tint only — use rgba(5,5,10,0.55) → rgba(5,5,10,0.85) or linear-gradient(rgba(5,5,10,0.5), rgba(5,5,10,0.85)). Do NOT apply a vibrant violet/cyan colour tint directly over the photograph — keep neon on typography and the glow blobs, never on the image overlay itself.
   Add ambient neon glow blobs (CSS only, pointer-events:none): two absolute divs with radial-gradient neon colour, opacity 0.15, blur-3xl
 
 ANIMATIONS:
