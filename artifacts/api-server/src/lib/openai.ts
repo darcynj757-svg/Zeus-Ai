@@ -1335,6 +1335,7 @@ TYPOGRAPHY (load via Google Fonts):
 
 HERO:
   Full dark overlay + neon gradient accent
+  Overlay over the hero PHOTO must be a DARKENING tint only — use rgba(5,5,10,0.55) → rgba(5,5,10,0.85) or linear-gradient(rgba(5,5,10,0.5), rgba(5,5,10,0.85)). Do NOT apply a vibrant violet/cyan colour tint directly over the photograph — keep neon on typography and the glow blobs, never on the image overlay itself.
   Add ambient neon glow blobs (CSS only, pointer-events:none): two absolute divs with radial-gradient neon colour, opacity 0.15, blur-3xl
 
 ANIMATIONS:
@@ -1384,9 +1385,10 @@ BUTTONS (extra bold and rounded):
   Secondary: background: #fff; border: 2px solid #1a1035; color: #1a1035; border-radius: var(--radius-full); box-shadow: 3px 3px 0px #1a1035;
 
 TYPOGRAPHY (load via Google Fonts):
-  Display heading font: 'Nunito' or 'Fredoka One', weight 700–900
+  Display heading font: 'Fredoka' or 'Nunito', weight 600–700  (use the 'Fredoka' Google Fonts family for headings; keep 'Nunito' for body text to preserve heading/body contrast)
   Body font: 'Nunito' or 'Poppins', weight 400–500
   Hero headline: font-weight: 900; letter-spacing: -0.02em; color: #fff
+  HERO PHOTO OVERLAY: the bright orange→purple --gradient-hero is decorative — under the white headline you MUST keep a darkening layer so the text stays readable. Either lower overlay alpha and add a dark scrim (e.g. extra linear-gradient(rgba(26,16,53,0.35), rgba(26,16,53,0.65)) on top of the photo), or constrain the vivid tint to the hero edges. Never let the saturated orange/purple wash flood the whole photograph — keep the centre behind the headline sufficiently dark.
   Section headings: font-weight: 800; color: var(--color-text)
   Add colorful text spans: <span style="color:var(--color-primary)"> on key words
 
@@ -1499,6 +1501,13 @@ function getOpenAIClient(): OpenAI {
 // Calls the chat API and, if the model output is cut off (finish_reason === "length"),
 // automatically requests continuations and concatenates them. Eliminates truncated
 // HTML/CSS/JS that previously produced "raw" / non-responsive output.
+// Strips leading markdown fences / stray whitespace that a model sometimes
+// emits at the start of a continuation chunk, so blind concatenation of
+// continuation parts still yields a single valid JSON object.
+export function trimContinuation(part: string): string {
+  return part.replace(/^\s*```(?:json)?\s*/i, "");
+}
+
 async function createCompletionWithContinuation(
   openai: OpenAI,
   model: string,
@@ -1516,7 +1525,8 @@ async function createCompletionWithContinuation(
       max_tokens: 16384,
     });
     const choice = completion.choices[0];
-    const part = choice?.message?.content ?? "";
+    const raw = choice?.message?.content ?? "";
+    const part = i === 0 ? raw : trimContinuation(raw);
     full += part;
     if (choice?.finish_reason !== "length") {
       return full;
@@ -1594,17 +1604,64 @@ export async function* streamWithOpenAI(
     { role: "user", content: userMessage },
   ];
 
-  const stream = await openai.chat.completions.create({
-    model,
-    messages: chatMessages,
-    temperature: 0.2,
-    max_tokens: 16384,
-    stream: true,
-  });
+  // Stream with truncation recovery: if the model stops with finish_reason
+  // "length", request continuations and keep streaming so SSE output is never
+  // cut off mid-JSON (mirrors createCompletionWithContinuation for the SSE path).
+  const working: Array<{ role: "user" | "assistant" | "system"; content: string }> = [
+    ...chatMessages,
+  ];
+  const MAX_CONTINUATIONS = 4;
 
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content;
-    if (delta) yield delta;
+  for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
+    const stream = await openai.chat.completions.create({
+      model,
+      messages: working,
+      temperature: 0.2,
+      max_tokens: 16384,
+      stream: true,
+    });
+
+    let part = "";
+    let finishReason: string | null = null;
+    // For continuation rounds (i >= 1) the model may prefix the chunk with a
+    // stray ```json fence; buffer the lead until we can strip it before yielding.
+    let leadHandled = i === 0;
+    let lead = "";
+
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      const delta = choice?.delta?.content;
+      if (delta) {
+        part += delta;
+        if (leadHandled) {
+          yield delta;
+        } else {
+          lead += delta;
+          // Once we have enough to decide (or a newline), strip a leading fence and flush.
+          if (lead.length >= 16 || lead.includes("\n")) {
+            const cleaned = trimContinuation(lead);
+            if (cleaned) yield cleaned;
+            leadHandled = true;
+            lead = "";
+          }
+        }
+      }
+      if (choice?.finish_reason) finishReason = choice.finish_reason;
+    }
+    // Flush any buffered lead if the stream ended before the threshold.
+    if (!leadHandled && lead) {
+      const cleaned = trimContinuation(lead);
+      if (cleaned) yield cleaned;
+    }
+
+    if (finishReason !== "length") return;
+
+    working.push({ role: "assistant", content: part });
+    working.push({
+      role: "user",
+      content:
+        "Continue the response EXACTLY where you stopped. Do not repeat any characters already sent. Do not restart the JSON. Output only the raw continuation so that concatenating it to the previous text yields the complete valid JSON object.",
+    });
   }
 }
 
