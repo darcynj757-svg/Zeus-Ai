@@ -594,7 +594,13 @@ router.get("/projects/:id/download", async (req, res): Promise<void> => {
 
   archive.pipe(res);
   for (const file of files) {
-    archive.append(file.content, { name: file.path });
+    // Guard against zip-slip: strip leading slashes and any ".." path segments
+    const safePath = file.path
+      .split(/[\\/]+/)
+      .filter((seg) => seg !== "" && seg !== "." && seg !== "..")
+      .join("/");
+    if (!safePath) continue;
+    archive.append(file.content, { name: safePath });
   }
   await archive.finalize();
 });
