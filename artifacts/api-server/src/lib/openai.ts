@@ -1502,7 +1502,7 @@ function getOpenAIClient(): OpenAI {
 // Strips leading markdown fences / stray whitespace that a model sometimes
 // emits at the start of a continuation chunk, so blind concatenation of
 // continuation parts still yields a single valid JSON object.
-function trimContinuation(part: string): string {
+export function trimContinuation(part: string): string {
   return part.replace(/^\s*```(?:json)?\s*/i, "");
 }
 
