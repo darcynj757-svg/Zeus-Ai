@@ -328,6 +328,12 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
 
+  // Track client disconnect so we stop burning OpenAI/E2B resources on an abandoned request
+  let aborted = false;
+  req.on("close", () => {
+    aborted = true;
+  });
+
   const historyMapped = history.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
   try {
@@ -350,6 +356,7 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
 
     try {
       for await (const chunk of streamWithOpenAI(historyMapped, userMessageContent, projectType, tier, style)) {
+        if (aborted) break;
         fullText += chunk;
         tokenBuffer += chunk;
       }
@@ -366,7 +373,9 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
     let generated;
     try {
       generated = parseGeneratedOutput(fullText);
-    } catch {
+    } catch (parseErr) {
+      // Streamed output was not valid — fall back to a fresh non-streaming request
+      req.log.warn({ parseErr }, "Streamed output failed to parse; retrying via non-streaming generation");
       // Retry with non-streaming fallback
       sendSSE(res, "status", { text: "Перезапускаю молнию (повторная попытка)..." });
       generated = await generateWithOpenAI(historyMapped, userMessageContent, projectType, tier, style);
@@ -392,6 +401,12 @@ router.post("/projects/:id/generate", async (req, res): Promise<void> => {
       } else {
         await db.insert(filesTable).values({ projectId: params.data.id, path: file.path, content: file.content });
       }
+    }
+
+    // Client already gone — skip the expensive deploy and finish quietly
+    if (aborted) {
+      req.log.info({ projectId: params.data.id }, "Client disconnected before deploy; skipping sandbox deploy");
+      return;
     }
 
     // Deploy to E2B with retries
